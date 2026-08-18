@@ -51,10 +51,10 @@ class CallbackVerifierTest extends TestCase
         ], $payload);
     }
 
-    public function testStartIdempotencyKeyFormat()
+    public function testStartIdempotencyKeyIsStableHash()
     {
         $this->assertSame(
-            'start:ic:skc_approval:NO1',
+            'aaa8e4ad51fa4c426209f29d155f658cbbfb93fc93f605f49de9a873c02df162',
             WorkflowApprovalResult::startIdempotencyKey('ic', 'skc_approval', 'NO1')
         );
     }

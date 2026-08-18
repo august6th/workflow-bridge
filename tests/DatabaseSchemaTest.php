@@ -29,4 +29,14 @@ class DatabaseSchemaTest extends TestCase
 
         $this->assertSame(64, strlen($key));
     }
+
+    public function testStartWorkflowAndApplyStatesAreSeparated()
+    {
+        $this->assertSame('pending', WorkflowApprovalResult::START_PENDING);
+        $this->assertSame('processing', WorkflowApprovalResult::START_PROCESSING);
+        $this->assertSame('succeeded', WorkflowApprovalResult::START_SUCCEEDED);
+        $this->assertSame('failed', WorkflowApprovalResult::START_FAILED);
+        $this->assertSame('not_started', WorkflowApprovalResult::STATUS_NOT_STARTED);
+        $this->assertSame('processing', WorkflowApprovalResult::APPLY_PROCESSING);
+    }
 }
