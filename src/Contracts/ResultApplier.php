@@ -8,7 +8,9 @@ interface ResultApplier
 {
     /**
      * Apply a finished workflow result into the host business system.
-     * Return true when applied or intentionally skipped without error.
+     * Implementations must be idempotent by result ID or by the business triple
+     * because a crashed worker may retry after the lease expires.
+     * Return true when applied, or false when intentionally skipped without error.
      *
      * @param WorkflowApprovalResult $result
      * @return bool
