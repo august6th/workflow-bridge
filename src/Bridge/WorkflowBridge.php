@@ -7,6 +7,7 @@ use August6th\WorkflowBridge\Jobs\StartWorkflowProcessJob;
 use August6th\WorkflowBridge\Models\WorkflowApprovalResult;
 use August6th\WorkflowBridge\Start\StartWorkflowProcessor;
 use Illuminate\Contracts\Bus\Dispatcher;
+use InvalidArgumentException;
 
 class WorkflowBridge
 {
@@ -174,21 +175,42 @@ class WorkflowBridge
      */
     public function mapResultsByBusinessKeys(array $businessKeys, $ownerSystem = '', $processCode = '')
     {
+        $processCode = trim((string) $processCode);
+        if ($processCode === '') {
+            throw new InvalidArgumentException('process_code is required');
+        }
+
         $ownerSystem = $ownerSystem !== ''
             ? $ownerSystem
             : (isset($this->config['owner_system']) ? (string) $this->config['owner_system'] : 'erp');
 
-        if (!$businessKeys) {
+        $normalizedBusinessKeys = [];
+        $seen = [];
+        foreach ($businessKeys as $businessKey) {
+            if (!is_scalar($businessKey)) {
+                continue;
+            }
+            $businessKey = trim((string) $businessKey);
+            if ($businessKey === '' || isset($seen[$businessKey])) {
+                continue;
+            }
+            $seen[$businessKey] = true;
+            $normalizedBusinessKeys[] = $businessKey;
+        }
+
+        if (!$normalizedBusinessKeys) {
             return collect();
         }
 
-        $query = WorkflowApprovalResult::whereIn('business_key', $businessKeys)
-            ->where('owner_system', $ownerSystem);
-        if ($processCode !== '') {
-            $query->where('process_code', $processCode);
-        }
+        $results = WorkflowApprovalResult::whereIn('business_key', $normalizedBusinessKeys)
+            ->where('owner_system', $ownerSystem)
+            ->where('process_code', $processCode)
+            ->get()
+            ->keyBy('business_key');
 
-        return $query->get()->keyBy('business_key');
+        return collect($normalizedBusinessKeys)->mapWithKeys(function ($businessKey) use ($results) {
+            return [$businessKey => $results->get($businessKey)];
+        });
     }
 
 }

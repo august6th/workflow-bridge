@@ -8,6 +8,7 @@ use August6th\WorkflowBridge\Jobs\StartWorkflowProcessJob;
 use August6th\WorkflowBridge\Models\WorkflowApprovalResult;
 use August6th\WorkflowBridge\Start\StartWorkflowProcessor;
 use Illuminate\Contracts\Bus\Dispatcher;
+use InvalidArgumentException;
 use RuntimeException;
 
 class WorkflowBridgeStartTest extends TestCase
@@ -276,5 +277,41 @@ class WorkflowBridgeStartTest extends TestCase
 
         $this->assertSame(1, $stats['processed']);
         $this->assertSame(WorkflowApprovalResult::START_SUCCEEDED, $stale->fresh()->start_status);
+    }
+
+    public function testMapResultsRequiresProcessCode()
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('process_code is required');
+
+        $client = $this->createMock(WorkflowClient::class);
+        $bridge = new WorkflowBridge($client, ['owner_system' => 'ic']);
+        $bridge->mapResultsByBusinessKeys(['A010'], 'ic');
+    }
+
+    public function testMapResultsReturnsOneEntryPerRequestedBusinessKey()
+    {
+        $client = $this->createMock(WorkflowClient::class);
+        $bridge = new WorkflowBridge($client, ['owner_system' => 'ic']);
+        $first = $bridge->requestProcess('skc_approval', 'A010');
+        $second = $bridge->requestProcess('skc_approval', 'A011');
+        $otherProcess = $bridge->requestProcess('other_approval', 'A010');
+        $first->workflow_status = WorkflowApprovalResult::STATUS_APPROVED;
+        $first->save();
+        $second->workflow_status = WorkflowApprovalResult::STATUS_REJECTED;
+        $second->save();
+        $otherProcess->workflow_status = WorkflowApprovalResult::STATUS_REJECTED;
+        $otherProcess->save();
+
+        $mapped = $bridge->mapResultsByBusinessKeys(
+            ['A010', 'A010', '', 'A011', 'MISSING'],
+            'ic',
+            'skc_approval'
+        );
+
+        $this->assertSame(['A010', 'A011', 'MISSING'], $mapped->keys()->all());
+        $this->assertSame($first->id, $mapped->get('A010')->id);
+        $this->assertSame($second->id, $mapped->get('A011')->id);
+        $this->assertNull($mapped->get('MISSING'));
     }
 }

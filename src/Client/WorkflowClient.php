@@ -2,6 +2,8 @@
 
 namespace August6th\WorkflowBridge\Client;
 
+use August6th\WorkflowBridge\Exceptions\WorkflowRequestException;
+use Exception;
 use GuzzleHttp\Client;
 use RuntimeException;
 
@@ -70,7 +72,7 @@ class WorkflowClient
         }
 
         if ($token === '') {
-            throw new RuntimeException('Workflow SSO login failed: missing access_token');
+            throw new WorkflowRequestException('Workflow SSO login failed: missing access_token');
         }
 
         $this->accessToken = $token;
@@ -144,7 +146,7 @@ class WorkflowClient
      * @param bool $auth
      * @return array
      */
-    protected function request($method, $uri, array $options = [], $auth = true)
+    protected function request($method, $uri, array $options = [], $auth = true, $retried = false)
     {
         if ($auth) {
             $options['headers'] = array_merge(
@@ -153,19 +155,38 @@ class WorkflowClient
             );
         }
 
-        $response = $this->http->request($method, ltrim($uri, '/'), $options);
+        try {
+            $response = $this->http->request($method, ltrim($uri, '/'), $options);
+        } catch (Exception $exception) {
+            throw new WorkflowRequestException(
+                'Workflow request failed: ' . $exception->getMessage(),
+                0,
+                0,
+                $exception
+            );
+        }
+
+        if ($auth && $response->getStatusCode() === 401 && !$retried) {
+            $this->accessToken = '';
+            $this->tokenExpiresAt = 0;
+            $this->login();
+
+            return $this->request($method, $uri, $options, true, true);
+        }
+
         $body = (string) $response->getBody();
         $decoded = json_decode($body, true);
         if (!is_array($decoded)) {
-            throw new RuntimeException(
-                'Workflow response is not JSON: HTTP ' . $response->getStatusCode() . ' ' . substr($body, 0, 200)
+            throw new WorkflowRequestException(
+                'Workflow response is not JSON: ' . substr($body, 0, 200),
+                $response->getStatusCode()
             );
         }
 
         $code = isset($decoded['code']) ? (int) $decoded['code'] : 0;
         if ($response->getStatusCode() >= 400 || ($code !== 0 && $code !== 20000)) {
             $message = isset($decoded['message']) ? (string) $decoded['message'] : 'Workflow request failed';
-            throw new RuntimeException($message . ' (HTTP ' . $response->getStatusCode() . ', code ' . $code . ')');
+            throw new WorkflowRequestException($message, $response->getStatusCode(), $code);
         }
 
         return $decoded;
