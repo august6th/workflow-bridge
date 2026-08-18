@@ -25,6 +25,22 @@
 
 见 [PUBLISH_AND_IC_INSTALL.md](PUBLISH_AND_IC_INSTALL.md)。
 
+IC 创建审版单后直接派发包内通用 Job：
+
+```php
+dispatch(new StartWorkflowProcessJob(
+    $processCode,
+    $approvalNo,
+    [
+        'owner_system' => 'ic',
+        'business_payload' => $payload,
+        'input' => $payload,
+    ]
+));
+```
+
+后续其他审核流也使用 `StartWorkflowProcessJob`，不再新增业务专用 Job。
+
 ## 同步状态
 
 ```text

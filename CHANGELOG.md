@@ -5,6 +5,7 @@
 ### Added
 
 - Workflow SSO client：login / start / query
+- 通用异步 `StartWorkflowProcessJob`
 - `WorkflowBridge::startProcess` 与失败落库 `start_failed`
 - `workflow_approval_results` migration
 - 回调验签与幂等 `CallbackHandler`

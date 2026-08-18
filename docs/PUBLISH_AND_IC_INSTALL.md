@@ -37,6 +37,38 @@ cat .gitignore
 
 **高危：不要把 Workflow / IC 的 `WORKFLOW_SSO_SECRET`、`WORKFLOW_CALLBACK_SECRET`、数据库密码写进包源码或 README 示例。**
 
+### 当前本地仓库首发前必须清理历史
+
+本地仓库的早期提交曾误跟踪 `vendor/`、`composer.lock` 和 PHPUnit 缓存。
+这些内容已从当前索引移除，但仍存在旧提交历史中。**该仓库尚未推送时，不要直接 push 当前历史。**
+
+首次发布前请重建一条干净历史：
+
+```bash
+cd /Users/aug/Code/erp/workflow-bridge
+
+# 先确认需要发布的源码都在工作目录
+git status
+
+# 新建无父提交的干净分支
+git switch --orphan release-main
+git reset
+git add .gitignore .github CHANGELOG.md README.md UPGRADE.md \
+  composer.json config database docs phpunit.xml src tests
+git commit -m "release: workflow-bridge v1.0.0"
+
+# 核对当前提交不含 vendor/lock/env
+git ls-tree -r --name-only HEAD | rg '^(vendor/|composer\.lock$|\.env$)' && echo "发现风险文件" || echo "发布文件安全"
+
+# 用干净分支替代本地 main，并重新创建 tag
+git branch -D main
+git branch -m main
+git tag -d v1.0.0 2>/dev/null || true
+git tag -a v1.0.0 -m "v1.0.0"
+```
+
+上述操作会替换**尚未推送**的本地包历史；若远程已经存在，请不要执行，改为先审核远程历史。
+
 ---
 
 ## 二、本地仓库准备
@@ -48,8 +80,8 @@ cd /Users/aug/Code/erp/workflow-bridge
 composer install --no-interaction
 vendor/bin/phpunit
 
-# 确认版本号（composer.json 里 "version": "1.0.0"）
-# 打 tag（SemVer）
+# Composer 库版本由 Git tag 决定，不在 composer.json 写 version
+# 打 tag（SemVer；若已按上节重建历史则无需重复）
 git add -A
 git commit -m "release: v1.0.0"
 git tag -a v1.0.0 -m "v1.0.0"
@@ -123,7 +155,12 @@ composer require august6th/workflow-bridge:^1.0 --no-plugins --ignore-platform-r
   {
     "type": "path",
     "url": "../workflow-bridge",
-    "options": { "symlink": true }
+    "options": {
+      "symlink": true,
+      "versions": {
+        "august6th/workflow-bridge": "1.0.0"
+      }
+    }
   }
 ]
 ```

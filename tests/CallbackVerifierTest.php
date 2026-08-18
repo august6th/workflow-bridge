@@ -3,6 +3,7 @@
 namespace August6th\WorkflowBridge\Tests;
 
 use August6th\WorkflowBridge\Callback\CallbackVerifier;
+use August6th\WorkflowBridge\Jobs\StartWorkflowProcessJob;
 use August6th\WorkflowBridge\Models\WorkflowApprovalResult;
 use PHPUnit\Framework\TestCase;
 
@@ -62,5 +63,18 @@ class CallbackVerifierTest extends TestCase
     {
         $this->assertSame('发起失败', WorkflowApprovalResult::statusLabel('start_failed'));
         $this->assertSame('审批中', WorkflowApprovalResult::statusLabel('waiting'));
+    }
+
+    public function testGenericStartJobCarriesAnyBusinessWorkflow()
+    {
+        $job = new StartWorkflowProcessJob('purchase_order_approval', 'PO1001', [
+            'owner_system' => 'pms',
+            'business_payload' => ['purchase_no' => 'PO1001'],
+            'input' => ['purchase_no' => 'PO1001'],
+        ]);
+
+        $this->assertSame('purchase_order_approval', $job->processCode);
+        $this->assertSame('PO1001', $job->businessKey);
+        $this->assertSame('pms', $job->options['owner_system']);
     }
 }

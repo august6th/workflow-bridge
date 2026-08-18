@@ -8,6 +8,7 @@ ERP 业务系统接入 Workflow 审核流的通用 Composer 包。
 ## 能力
 
 - SSO 换 token 后发起 / 查询流程
+- 通用异步 Job，新增业务流程无需再编写专用队列类
 - 本地表 `workflow_approval_results` 记录同步与终态
 - 回调验签 + 幂等落库
 - `workflow:retry-start` 补偿发起失败
@@ -29,7 +30,12 @@ composer require august6th/workflow-bridge:^1.0
     {
       "type": "path",
       "url": "../workflow-bridge",
-      "options": { "symlink": true }
+      "options": {
+        "symlink": true,
+        "versions": {
+          "august6th/workflow-bridge": "1.0.0"
+        }
+      }
     }
   ],
   "require": {
@@ -101,6 +107,27 @@ WORKFLOW_SKC_APPROVAL_PROCESS_CODE=skc_approval
 ```
 
 ## 发起
+
+异步发起（推荐）：
+
+```php
+use August6th\WorkflowBridge\Jobs\StartWorkflowProcessJob;
+
+dispatch(new StartWorkflowProcessJob(
+    'skc_approval',
+    $approvalNo,
+    [
+        'owner_system' => 'ic',
+        'business_payload' => $payload,
+        'input' => $payload,
+    ]
+));
+```
+
+其他采购、调拨、商品等审核流复用同一个 Job，只需替换
+`processCode`、`businessKey` 和 payload，不需要新增 Job 类。
+
+同步发起：
 
 ```php
 use August6th\WorkflowBridge\Bridge\WorkflowBridge;
