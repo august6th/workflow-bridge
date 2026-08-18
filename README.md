@@ -15,24 +15,13 @@ ERP 业务系统接入 Workflow 审核流的通用 Composer 包。
 
 ## 安装
 
+远程仓库创建后推荐：
+
 ```bash
 composer require august6th/workflow-bridge:^1.0
 ```
 
-私有仓库时在业务项目 `composer.json` 增加：
-
-```json
-{
-  "repositories": [
-    {
-      "type": "vcs",
-      "url": "https://github.com/august6th/workflow-bridge.git"
-    }
-  ]
-}
-```
-
-本地联调（仅开发机）可用 path：
+当前本地（GitHub 仓库尚未创建时）IC 使用 path 仓库锁定 `1.0.0`：
 
 ```json
 {
@@ -45,6 +34,22 @@ composer require august6th/workflow-bridge:^1.0
   ],
   "require": {
     "august6th/workflow-bridge": "1.0.0"
+  }
+}
+```
+
+仓库就绪后改为：
+
+```json
+{
+  "repositories": [
+    {
+      "type": "vcs",
+      "url": "https://github.com/august6th/workflow-bridge.git"
+    }
+  ],
+  "require": {
+    "august6th/workflow-bridge": "^1.0"
   }
 }
 ```
