@@ -40,6 +40,9 @@ class CallbackVerifier
         if ($timestamp === '' || $nonce === '' || $signature === '') {
             throw new RuntimeException('Missing workflow callback signature headers');
         }
+        if (preg_match('/^\d+$/D', $timestamp) !== 1) {
+            throw new RuntimeException('Invalid workflow callback timestamp');
+        }
 
         if (abs(time() - (int) $timestamp) > $this->clockSkewSeconds) {
             throw new RuntimeException('Workflow callback timestamp out of range');

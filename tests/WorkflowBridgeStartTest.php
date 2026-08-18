@@ -8,6 +8,7 @@ use August6th\WorkflowBridge\Jobs\StartWorkflowProcessJob;
 use August6th\WorkflowBridge\Models\WorkflowApprovalResult;
 use August6th\WorkflowBridge\Start\StartWorkflowProcessor;
 use Illuminate\Contracts\Bus\Dispatcher;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -42,6 +43,47 @@ class WorkflowBridgeStartTest extends TestCase
         $this->assertSame($first->id, $second->id);
         $this->assertSame($first->start_idempotency_key, $second->start_idempotency_key);
         $this->assertSame(1, WorkflowApprovalResult::count());
+    }
+
+    public function testConcurrentRequestReturnsRowCreatedByUniqueKeyRace()
+    {
+        $client = $this->createMock(WorkflowClient::class);
+        $bridge = new WorkflowBridge($client, ['owner_system' => 'ic']);
+        $inserted = false;
+        WorkflowApprovalResult::creating(function () use (&$inserted) {
+            if ($inserted) {
+                return;
+            }
+            $inserted = true;
+            $now = date('Y-m-d H:i:s');
+            $idempotencyKey = WorkflowApprovalResult::startIdempotencyKey(
+                'ic',
+                'skc_approval',
+                'A002-RACE'
+            );
+            DB::table('workflow_approval_results')->insert([
+                'business_key' => 'A002-RACE',
+                'owner_system' => 'ic',
+                'process_code' => 'skc_approval',
+                'start_status' => WorkflowApprovalResult::START_PENDING,
+                'workflow_status' => WorkflowApprovalResult::STATUS_NOT_STARTED,
+                'start_idempotency_key' => $idempotencyKey,
+                'idempotency_key' => $idempotencyKey,
+                'local_apply_status' => WorkflowApprovalResult::APPLY_PENDING,
+                'start_next_retry_at' => $now,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+        });
+
+        try {
+            $result = $bridge->requestProcess('skc_approval', 'A002-RACE');
+        } finally {
+            WorkflowApprovalResult::flushEventListeners();
+        }
+
+        $this->assertSame('A002-RACE', $result->business_key);
+        $this->assertSame(1, WorkflowApprovalResult::where('business_key', 'A002-RACE')->count());
     }
 
     public function testProcessorMarksSuccessfulStartAndStoresActualVersion()

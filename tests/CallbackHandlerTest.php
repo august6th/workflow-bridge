@@ -44,6 +44,8 @@ class CallbackHandlerTest extends TestCase
         $this->assertSame($result->id, $handled->id);
         $this->assertSame(WorkflowApprovalResult::STATUS_APPROVED, $handled->workflow_status);
         $this->assertSame(WorkflowApprovalResult::APPLY_PENDING, $handled->local_apply_status);
+        $this->assertNull($handled->start_next_retry_at);
+        $this->assertNull($handled->start_processing_at);
         $this->assertSame(1, WorkflowCallbackDelivery::count());
         $delivery = WorkflowCallbackDelivery::first();
         $this->assertSame($result->id, $delivery->approval_result_id);
@@ -97,6 +99,27 @@ class CallbackHandlerTest extends TestCase
         $handler->handle($headers, $payload);
     }
 
+    public function testRepeatedIdempotencyKeyCannotReferToAnotherBusinessRecord()
+    {
+        $this->createWaitingResult('A104', 'pi_a104');
+        $this->createWaitingResult('A105', 'pi_a105');
+        list($handler, $firstHeaders, $firstPayload) = $this->signedCallback([
+            'business_key' => 'A104',
+            'instance_uuid' => 'pi_a104',
+            'idempotency_key' => 'callback:shared:approved',
+        ]);
+        $handler->handle($firstHeaders, $firstPayload);
+        list($handler, $secondHeaders, $secondPayload) = $this->signedCallback([
+            'business_key' => 'A105',
+            'instance_uuid' => 'pi_a105',
+            'idempotency_key' => 'callback:shared:approved',
+        ]);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Workflow callback idempotency key conflicts with existing delivery');
+        $handler->handle($secondHeaders, $secondPayload);
+    }
+
     protected function createWaitingResult($businessKey, $instanceUuid)
     {
         $now = date('Y-m-d H:i:s');
@@ -110,6 +133,8 @@ class CallbackHandlerTest extends TestCase
         $result->start_idempotency_key = WorkflowApprovalResult::startIdempotencyKey('ic', 'skc_approval', $businessKey);
         $result->idempotency_key = $result->start_idempotency_key;
         $result->local_apply_status = WorkflowApprovalResult::APPLY_PENDING;
+        $result->start_next_retry_at = $now;
+        $result->start_processing_at = $now;
         $result->created_at = $now;
         $result->updated_at = $now;
         $result->save();

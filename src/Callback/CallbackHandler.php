@@ -50,7 +50,7 @@ class CallbackHandler
 
         $existingDelivery = WorkflowCallbackDelivery::where('idempotency_key', $idempotencyKey)->first();
         if ($existingDelivery) {
-            return WorkflowApprovalResult::where('id', $existingDelivery->approval_result_id)->firstOrFail();
+            return $this->existingDeliveryResult($existingDelivery, $payload);
         }
 
         try {
@@ -59,7 +59,7 @@ class CallbackHandler
                     ->lockForUpdate()
                     ->first();
                 if ($existingDelivery) {
-                    return WorkflowApprovalResult::where('id', $existingDelivery->approval_result_id)->firstOrFail();
+                    return $this->existingDeliveryResult($existingDelivery, $payload);
                 }
 
                 $row = WorkflowApprovalResult::where('business_key', $payload['business_key'])
@@ -97,6 +97,8 @@ class CallbackHandler
 
                 $wasTerminal = $row->isTerminal();
                 $row->start_status = WorkflowApprovalResult::START_SUCCEEDED;
+                $row->start_next_retry_at = null;
+                $row->start_processing_at = null;
                 $row->workflow_status = $payload['result'];
                 $row->result = $payload['result'];
                 $row->result_value = $delivery->result_value;
@@ -118,11 +120,36 @@ class CallbackHandler
         } catch (QueryException $exception) {
             $existingDelivery = WorkflowCallbackDelivery::where('idempotency_key', $idempotencyKey)->first();
             if ($existingDelivery) {
-                return WorkflowApprovalResult::where('id', $existingDelivery->approval_result_id)->firstOrFail();
+                return $this->existingDeliveryResult($existingDelivery, $payload);
             }
 
             throw $exception;
         }
+    }
+
+    /**
+     * @param WorkflowCallbackDelivery $delivery
+     * @param array $payload
+     * @return WorkflowApprovalResult
+     */
+    protected function existingDeliveryResult(WorkflowCallbackDelivery $delivery, array $payload)
+    {
+        foreach (['business_key', 'owner_system', 'process_code', 'instance_uuid', 'event', 'result'] as $field) {
+            if ($delivery->{$field} !== $payload[$field]) {
+                throw new InvalidArgumentException(
+                    'Workflow callback idempotency key conflicts with existing delivery'
+                );
+            }
+        }
+
+        $resultValue = isset($payload['result_value']) ? $payload['result_value'] : $payload['result'];
+        if ($delivery->result_value !== $resultValue) {
+            throw new InvalidArgumentException(
+                'Workflow callback idempotency key conflicts with existing delivery'
+            );
+        }
+
+        return WorkflowApprovalResult::where('id', $delivery->approval_result_id)->firstOrFail();
     }
 
     /**

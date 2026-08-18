@@ -60,6 +60,28 @@ class CallbackVerifierTest extends TestCase
         $verifier->verify([], ['idempotency_key' => 'k1']);
     }
 
+    public function testVerifyRejectsTimestampThatIsNotAnIntegerString()
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Invalid workflow callback timestamp');
+
+        $timestamp = (string) time() . 'suffix';
+        $payload = ['idempotency_key' => 'k2'];
+        $verifier = new CallbackVerifier('callback-secret', 300);
+        $signature = hash_hmac('sha256', implode("\n", [
+            $timestamp,
+            'nonce-k2',
+            'k2',
+            $verifier->jsonForSignature($payload),
+        ]), 'callback-secret');
+        $verifier->verify([
+            'X-Workflow-Timestamp' => $timestamp,
+            'X-Workflow-Nonce' => 'nonce-k2',
+            'X-Workflow-Signature' => $signature,
+            'X-Workflow-Idempotency-Key' => 'k2',
+        ], $payload);
+    }
+
     public function testStartIdempotencyKeyIsStableHash()
     {
         $this->assertSame(

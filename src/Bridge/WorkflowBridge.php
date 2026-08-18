@@ -7,6 +7,7 @@ use August6th\WorkflowBridge\Jobs\StartWorkflowProcessJob;
 use August6th\WorkflowBridge\Models\WorkflowApprovalResult;
 use August6th\WorkflowBridge\Start\StartWorkflowProcessor;
 use Illuminate\Contracts\Bus\Dispatcher;
+use Illuminate\Database\QueryException;
 use InvalidArgumentException;
 
 class WorkflowBridge
@@ -89,7 +90,19 @@ class WorkflowBridge
         $result->start_next_retry_at = $now;
         $result->created_at = $now;
         $result->updated_at = $now;
-        $result->save();
+        try {
+            $result->save();
+        } catch (QueryException $exception) {
+            $existing = WorkflowApprovalResult::where('business_key', $businessKey)
+                ->where('owner_system', $ownerSystem)
+                ->where('process_code', $processCode)
+                ->first();
+            if ($existing) {
+                return $existing;
+            }
+
+            throw $exception;
+        }
 
         return $result;
     }

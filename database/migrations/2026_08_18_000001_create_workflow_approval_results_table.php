@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class CreateWorkflowApprovalResultsTable extends Migration
@@ -39,8 +40,8 @@ class CreateWorkflowApprovalResultsTable extends Migration
                 $table->dateTime('started_at')->nullable()->comment('Workflow 实例开始时间，未开始时为 NULL');
                 $table->dateTime('finished_at')->nullable()->comment('Workflow 实例结束时间，未结束时为 NULL');
                 $table->dateTime('applied_at')->nullable()->comment('业务结果应用完成时间，未完成时为 NULL');
-                $table->dateTime('created_at')->useCurrent()->comment('创建时间');
-                $table->dateTime('updated_at')->useCurrent()->comment('更新时间');
+                $table->dateTime('created_at')->default(DB::raw('CURRENT_TIMESTAMP'))->comment('创建时间');
+                $table->dateTime('updated_at')->default(DB::raw('CURRENT_TIMESTAMP'))->comment('更新时间');
 
                 $table->unique('idempotency_key', 'uk_war_idem');
                 $table->unique(['business_key', 'process_code', 'owner_system'], 'uk_war_biz');
@@ -66,9 +67,9 @@ class CreateWorkflowApprovalResultsTable extends Migration
                 $table->string('idempotency_key', 190)->default('')->comment('Workflow 回调幂等键');
                 $table->string('delivery_id', 80)->default('')->comment('Workflow 投递 ID');
                 $table->mediumText('payload_json')->nullable()->comment('原始回调 JSON，应用层默认空对象');
-                $table->dateTime('received_at')->useCurrent()->comment('回调接收时间');
-                $table->dateTime('created_at')->useCurrent()->comment('创建时间');
-                $table->dateTime('updated_at')->useCurrent()->comment('更新时间');
+                $table->dateTime('received_at')->default(DB::raw('CURRENT_TIMESTAMP'))->comment('回调接收时间');
+                $table->dateTime('created_at')->default(DB::raw('CURRENT_TIMESTAMP'))->comment('创建时间');
+                $table->dateTime('updated_at')->default(DB::raw('CURRENT_TIMESTAMP'))->comment('更新时间');
 
                 $table->unique('idempotency_key', 'uk_wcd_idempotency');
                 $table->index('approval_result_id', 'idx_wcd_result');
