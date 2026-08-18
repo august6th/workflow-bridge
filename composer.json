@@ -1,0 +1,40 @@
+{
+    "name": "august6th/workflow-bridge",
+    "description": "ERP Workflow bridge: start/query/callback and local approval result table",
+    "type": "library",
+    "license": "MIT",
+    "version": "1.0.0",
+    "authors": [
+        {
+            "name": "august6th"
+        }
+    ],
+    "require": {
+        "php": ">=7.0.0",
+        "guzzlehttp/guzzle": "^6.2|^7.0",
+        "illuminate/support": "5.5.*|^6.0|^7.0|^8.0|^9.0|^10.0",
+        "illuminate/database": "5.5.*|^6.0|^7.0|^8.0|^9.0|^10.0",
+        "illuminate/console": "5.5.*|^6.0|^7.0|^8.0|^9.0|^10.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^6.0|^7.0|^8.0|^9.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "August6th\\WorkflowBridge\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "August6th\\WorkflowBridge\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "August6th\\WorkflowBridge\\WorkflowBridgeServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable"
+}
