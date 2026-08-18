@@ -54,13 +54,26 @@ composer require august6th/workflow-bridge:^1.0
 }
 ```
 
-发布配置与迁移：
+## 建表
+
+ERP 项目通常**不使用** Laravel migrate。请执行手工 SQL：
 
 ```bash
-php artisan vendor:publish --provider="August6th\\WorkflowBridge\\WorkflowBridgeServiceProvider" --tag=workflow-bridge-config
+mysql -h<host> -u<user> -p<db> < vendor/august6th/workflow-bridge/database/sql/workflow_approval_results.sql
+```
+
+源码路径：`database/sql/workflow_approval_results.sql`。
+
+若项目本身使用 migrate，也可 publish migration（可选）：
+
+```bash
 php artisan vendor:publish --provider="August6th\\WorkflowBridge\\WorkflowBridgeServiceProvider" --tag=workflow-bridge-migrations
 php artisan migrate
 ```
+
+## 发布与 IC 安装
+
+详见 **[docs/PUBLISH_AND_IC_INSTALL.md](docs/PUBLISH_AND_IC_INSTALL.md)**（含 GitHub 发版、`composer require`、安全检查）。
 
 Laravel 5.5 若未自动发现，在 `config/app.php` 的 `providers` 中注册：
 
