@@ -65,16 +65,11 @@ class CallbackVerifierTest extends TestCase
         $this->assertSame('审批中', WorkflowApprovalResult::statusLabel('waiting'));
     }
 
-    public function testGenericStartJobCarriesAnyBusinessWorkflow()
+    public function testStartJobCarriesPersistedResultId()
     {
-        $job = new StartWorkflowProcessJob('purchase_order_approval', 'PO1001', [
-            'owner_system' => 'pms',
-            'business_payload' => ['purchase_no' => 'PO1001'],
-            'input' => ['purchase_no' => 'PO1001'],
-        ]);
+        $job = new StartWorkflowProcessJob(42);
 
-        $this->assertSame('purchase_order_approval', $job->processCode);
-        $this->assertSame('PO1001', $job->businessKey);
-        $this->assertSame('pms', $job->options['owner_system']);
+        $this->assertSame(42, $job->approvalResultId);
+        $this->assertSame(1, $job->tries);
     }
 }

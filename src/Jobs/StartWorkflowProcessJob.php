@@ -2,7 +2,7 @@
 
 namespace August6th\WorkflowBridge\Jobs;
 
-use August6th\WorkflowBridge\Bridge\WorkflowBridge;
+use August6th\WorkflowBridge\Start\StartWorkflowProcessor;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
@@ -12,37 +12,23 @@ class StartWorkflowProcessJob implements ShouldQueue
 {
     use InteractsWithQueue, Queueable, SerializesModels;
 
-    public $tries = 3;
+    public $tries = 1;
 
     public $timeout = 60;
 
-    /** @var string */
-    public $processCode;
-
-    /** @var string */
-    public $businessKey;
-
-    /** @var array */
-    public $options;
+    /** @var int */
+    public $approvalResultId;
 
     /**
-     * @param string $processCode
-     * @param string $businessKey
-     * @param array $options owner_system, business_payload, input, allow_duplicate, process_version
+     * @param int $approvalResultId
      */
-    public function __construct($processCode, $businessKey, array $options = [])
+    public function __construct($approvalResultId)
     {
-        $this->processCode = (string) $processCode;
-        $this->businessKey = (string) $businessKey;
-        $this->options = $options;
+        $this->approvalResultId = $approvalResultId;
     }
 
-    public function handle(WorkflowBridge $bridge)
+    public function handle(StartWorkflowProcessor $processor)
     {
-        return $bridge->startProcess(
-            $this->processCode,
-            $this->businessKey,
-            $this->options
-        );
+        return $processor->process($this->approvalResultId);
     }
 }

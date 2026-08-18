@@ -8,6 +8,7 @@ use August6th\WorkflowBridge\Callback\CallbackVerifier;
 use August6th\WorkflowBridge\Client\WorkflowClient;
 use August6th\WorkflowBridge\Console\ApplyResultsCommand;
 use August6th\WorkflowBridge\Console\RetryFailedStartsCommand;
+use August6th\WorkflowBridge\Start\StartWorkflowProcessor;
 use Illuminate\Support\ServiceProvider;
 
 class WorkflowBridgeServiceProvider extends ServiceProvider
@@ -55,6 +56,15 @@ class WorkflowBridgeServiceProvider extends ServiceProvider
 
         $this->app->singleton(WorkflowBridge::class, function ($app) {
             return new WorkflowBridge(
+                $app->make(WorkflowClient::class),
+                $app['config']->get('workflow-bridge', []),
+                $app->make(StartWorkflowProcessor::class),
+                $app->make(\Illuminate\Contracts\Bus\Dispatcher::class)
+            );
+        });
+
+        $this->app->singleton(StartWorkflowProcessor::class, function ($app) {
+            return new StartWorkflowProcessor(
                 $app->make(WorkflowClient::class),
                 $app['config']->get('workflow-bridge', [])
             );
