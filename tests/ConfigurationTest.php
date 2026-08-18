@@ -24,6 +24,24 @@ class ConfigurationTest extends TestCase
         );
     }
 
+    public function testOperationalSettingsUsePackageDefaultsWithoutExtraEnvironmentSections()
+    {
+        $config = require __DIR__ . '/../config/workflow-bridge.php';
+
+        $this->assertSame(300, $config['sso_clock_skew_seconds']);
+        $this->assertSame(300, $config['callback_clock_skew_seconds']);
+        $this->assertSame(300, $config['start_lease_seconds']);
+        $this->assertSame(60, $config['start_retry_base_seconds']);
+        $this->assertSame(3600, $config['start_retry_max_seconds']);
+        $this->assertSame(300, $config['apply_lease_seconds']);
+        $this->assertSame(60, $config['apply_retry_base_seconds']);
+        $this->assertSame(3600, $config['apply_retry_max_seconds']);
+        $this->assertSame(15, $config['http_timeout']);
+        $this->assertSame(3600, $config['token_cache_seconds']);
+        $this->assertArrayNotHasKey('client', $config);
+        $this->assertArrayNotHasKey('processes', $config);
+    }
+
     public function testEmptyCallbackSecretRemainsFailClosed()
     {
         $config = require __DIR__ . '/../config/workflow-bridge.php';

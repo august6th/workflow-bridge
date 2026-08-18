@@ -16,9 +16,9 @@
 - Modify: `tests/ConfigurationTest.php`
 - Modify: `tests/WorkflowClientTest.php`
 
-- [ ] Add a configuration test asserting fixed operational defaults and removal of `client` and `processes` config sections.
-- [ ] Add an HTTP history test that decodes the SSO assertion and expects `external_user_id`, `user_name`, `name`, and `source_system` derived from `owner_system`.
-- [ ] Run `vendor/bin/phpunit tests/ConfigurationTest.php tests/WorkflowClientTest.php` and confirm the new assertions fail for the missing behavior.
+- [x] Add a configuration test asserting fixed operational defaults and removal of `client` and `processes` config sections.
+- [x] Add an HTTP history test that decodes the SSO assertion and expects `external_user_id`, `user_name`, `name`, and `source_system` derived from `owner_system`.
+- [x] Run focused PHPUnit tests and confirm the new assertions fail for the missing behavior.
 
 ### Task 2: Implement Derived Identity And Fixed Defaults
 
@@ -26,9 +26,9 @@
 - Modify: `config/workflow-bridge.php`
 - Modify: `src/Client/WorkflowClient.php`
 
-- [ ] Replace operational `env()` calls with their existing numeric defaults, remove unused process mapping, and keep only the four environment-backed values.
-- [ ] Derive the client identity from normalized `owner_system`, include `external_user_id`, and retain the two external API permissions.
-- [ ] Run the focused PHPUnit tests and confirm they pass.
+- [x] Replace operational `env()` calls with their existing numeric defaults, remove unused process mapping, and keep only the four environment-backed values.
+- [x] Derive the client identity from `owner_system`, include `external_user_id`, and retain the two external API permissions.
+- [x] Run the focused PHPUnit tests and confirm they pass.
 
 ### Task 3: Update Consumer Documentation
 
@@ -38,17 +38,17 @@
 - Modify: `docs/IC_SKC_APPROVAL_INTEGRATION.md`
 - Modify: `CHANGELOG.md`
 
-- [ ] Replace expanded `.env` samples with the four-variable contract.
-- [ ] Explain that Bridge has no direct Redis dependency and that the host queue driver determines whether Redis is used.
-- [ ] Document automatic client identity derivation and removal of the unused process-code environment variable.
+- [x] Replace expanded `.env` samples with the four-variable contract.
+- [x] Explain that Bridge has no direct Redis dependency and that the host queue driver determines whether Redis is used.
+- [x] Document automatic client identity derivation and removal of the unused process-code environment variable.
 
 ### Task 4: Verify And Commit
 
 **Files:**
 - Verify all changed source, tests, configuration, and documentation files.
 
-- [ ] Run `composer validate --strict`.
-- [ ] Run `vendor/bin/phpunit` and require zero failures.
-- [ ] Run PHP syntax checks for `src`, `config`, `database/migrations`, and `tests`.
-- [ ] Run `git diff --check` and inspect `git status --short`.
+- [x] Run `composer validate --strict`.
+- [x] Run `vendor/bin/phpunit` and require zero failures.
+- [x] Run PHP syntax checks for `src`, `config`, `database/migrations`, and `tests`.
+- [x] Run `git diff --check` and inspect `git status --short`.
 - [ ] Commit the complete change to `main` with `feat: simplify workflow bridge configuration`.

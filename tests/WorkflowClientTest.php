@@ -12,6 +12,39 @@ use GuzzleHttp\Psr7\Response;
 
 class WorkflowClientTest extends TestCase
 {
+    public function testLoginDerivesStableMachineIdentityFromOwnerSystem()
+    {
+        $history = [];
+        $mock = new MockHandler([
+            $this->jsonResponse(200, ['code' => 20000, 'data' => ['access_token' => 'token']]),
+        ]);
+        $stack = HandlerStack::create($mock);
+        $stack->push(Middleware::history($history));
+        $http = new Client([
+            'base_uri' => 'http://workflow.test/api/',
+            'handler' => $stack,
+            'http_errors' => false,
+        ]);
+        $client = new WorkflowClient([
+            'base_url' => 'http://workflow.test/api',
+            'sso_secret' => 'sso-secret',
+            'owner_system' => 'ic',
+        ], $http);
+
+        $client->login();
+
+        $requestBody = json_decode((string) $history[0]['request']->getBody(), true);
+        $claims = json_decode($this->base64UrlDecode($requestBody['assertion']), true);
+        $this->assertSame('ic_workflow_bridge', $claims['external_user_id']);
+        $this->assertSame('ic_workflow_bridge', $claims['user_name']);
+        $this->assertSame('IC Workflow Bridge', $claims['name']);
+        $this->assertSame('ic', $claims['source_system']);
+        $this->assertSame([
+            'workflow:external:start',
+            'workflow:external:view',
+        ], $claims['permissions']);
+    }
+
     public function testUnauthorizedResponseClearsTokenAndRetriesLoginOnce()
     {
         $history = [];
@@ -62,13 +95,8 @@ class WorkflowClientTest extends TestCase
         return new WorkflowClient([
             'base_url' => 'http://workflow.test/api',
             'sso_secret' => 'sso-secret',
+            'owner_system' => 'ic',
             'token_cache_seconds' => 3600,
-            'client' => [
-                'user_name' => 'ic_client',
-                'name' => 'IC Client',
-                'source_system' => 'ic',
-                'permissions' => ['workflow:external:start'],
-            ],
         ], $http);
     }
 
@@ -79,5 +107,15 @@ class WorkflowClientTest extends TestCase
             ['Content-Type' => 'application/json'],
             json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
         );
+    }
+
+    protected function base64UrlDecode($value)
+    {
+        $remainder = strlen($value) % 4;
+        if ($remainder > 0) {
+            $value .= str_repeat('=', 4 - $remainder);
+        }
+
+        return base64_decode(strtr($value, '-_', '+/'));
     }
 }

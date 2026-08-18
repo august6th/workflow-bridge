@@ -26,8 +26,10 @@ database/sql/workflow_approval_results.sql
 2. 创建业务回调资产，URL 为 `https://<ic-host>/workflow/callback`。
 3. 回调 secret 与 IC 的 `WORKFLOW_CALLBACK_SECRET` 完全一致。
 4. 将回调绑定到流程终态交付。
-5. 接入身份授予 `workflow:external:start`、`workflow:external:view`。
+5. 首次 SSO 登录会创建 `ic_workflow_bridge` 接入身份，为其授予 `workflow:external:start`、`workflow:external:view`。
 6. `WORKFLOW_SSO_SECRET` 与 Workflow 服务端配置一致。
+
+IC 只需配置 `WORKFLOW_BASE_URL`、`WORKFLOW_SSO_SECRET`、`WORKFLOW_CALLBACK_SECRET` 和 `WORKFLOW_OWNER_SYSTEM=ic`。流程编码直接作为方法参数传入，租约与重试参数使用包内默认值。
 
 ## IC 发起
 
@@ -64,3 +66,5 @@ $schedule->command('workflow:apply-results --process=skc_approval --owner=ic')->
 ```
 
 回调路由必须排除 IC 登录鉴权、内部 signature 中间件和 CSRF 校验。
+
+Bridge 本身不依赖 Redis。IC 使用 `sync` 或数据库队列时无需新增 Redis；只有将 Laravel 队列连接设置为 `redis` 时才需要相应基础设施。

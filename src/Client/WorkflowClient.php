@@ -37,12 +37,20 @@ class WorkflowClient
      */
     public function login(array $overrides = [])
     {
-        $client = isset($this->config['client']) ? $this->config['client'] : [];
+        $ownerSystem = isset($this->config['owner_system'])
+            ? trim($this->config['owner_system'])
+            : 'erp';
+        if ($ownerSystem === '') {
+            $ownerSystem = 'erp';
+        }
+        $clientId = $ownerSystem . '_workflow_bridge';
+
         $claims = array_merge([
-            'user_name' => isset($client['user_name']) ? $client['user_name'] : 'workflow_client',
-            'name' => isset($client['name']) ? $client['name'] : 'Workflow Client',
-            'source_system' => isset($client['source_system']) ? $client['source_system'] : 'erp',
-            'permissions' => isset($client['permissions']) ? $client['permissions'] : [
+            'external_user_id' => $clientId,
+            'user_name' => $clientId,
+            'name' => strtoupper($ownerSystem) . ' Workflow Bridge',
+            'source_system' => $ownerSystem,
+            'permissions' => [
                 'workflow:external:start',
                 'workflow:external:view',
             ],

@@ -59,20 +59,23 @@ WORKFLOW_BASE_URL=http://workflow.aug.test/api
 WORKFLOW_SSO_SECRET=
 WORKFLOW_CALLBACK_SECRET=
 WORKFLOW_OWNER_SYSTEM=ic
-WORKFLOW_CLIENT_USER_NAME=ic_workflow_client
-WORKFLOW_CLIENT_NAME="IC Workflow Client"
-WORKFLOW_CLIENT_SOURCE_SYSTEM=ic
-WORKFLOW_SKC_APPROVAL_PROCESS_CODE=skc_approval
-
-WORKFLOW_START_LEASE_SECONDS=300
-WORKFLOW_START_RETRY_BASE_SECONDS=60
-WORKFLOW_START_RETRY_MAX_SECONDS=3600
-WORKFLOW_APPLY_LEASE_SECONDS=300
-WORKFLOW_APPLY_RETRY_BASE_SECONDS=60
-WORKFLOW_APPLY_RETRY_MAX_SECONDS=3600
 ```
 
 `WORKFLOW_SSO_SECRET` 和 `WORKFLOW_CALLBACK_SECRET` 不能为空。回调 secret 为空时验签会直接失败。
+
+客户端身份由 `WORKFLOW_OWNER_SYSTEM` 自动生成。例如 `ic` 对应 `external_user_id` 和 `user_name` 均为 `ic_workflow_bridge`，展示名为 `IC Workflow Bridge`。流程编码由 `dispatchProcess()` 等方法直接传入，不需要环境变量。
+
+租约、重试、验签时间窗口、HTTP 超时和 token 缓存使用包内默认值。高级场景可以在发布后的 `config/workflow-bridge.php` 中调整，不需要继续扩充 `.env`。
+
+## Redis 与队列
+
+该包不直接访问 Redis。`requestProcess()`、`startProcess()`、失败重试和结果应用均可只使用业务数据库；`dispatchProcess()` 使用宿主 Laravel 项目的队列配置：
+
+- `sync`：同步执行，不需要 Redis
+- `database`：使用数据库队列，不需要 Redis
+- `redis`：由宿主项目提供 Redis 和队列 worker
+
+Workflow 服务端可继续使用 Redis 处理回调队列和共享缓存，这不要求每个 ERP 项目为 Bridge 单独部署 Redis。
 
 ## 发起流程
 
