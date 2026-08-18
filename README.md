@@ -81,6 +81,12 @@ Laravel 5.5 若未自动发现，在 `config/app.php` 的 `providers` 中注册�
 August6th\WorkflowBridge\WorkflowBridgeServiceProvider::class,
 ```
 
+发布配置：
+
+```bash
+php artisan vendor:publish --provider="August6th\\WorkflowBridge\\WorkflowBridgeServiceProvider" --tag=workflow-bridge-config
+```
+
 ## 环境变量
 
 ```env
@@ -89,7 +95,7 @@ WORKFLOW_SSO_SECRET=
 WORKFLOW_CALLBACK_SECRET=
 WORKFLOW_OWNER_SYSTEM=ic
 WORKFLOW_CLIENT_USER_NAME=ic_workflow_client
-WORKFLOW_CLIENT_NAME=IC Workflow Client
+WORKFLOW_CLIENT_NAME="IC Workflow Client"
 WORKFLOW_CLIENT_SOURCE_SYSTEM=ic
 WORKFLOW_SKC_APPROVAL_PROCESS_CODE=skc_approval
 ```
