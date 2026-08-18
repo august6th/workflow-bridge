@@ -6,7 +6,7 @@
 
 **Architecture:** Keep `WorkflowBridge` as the public facade, move remote-start state transitions into a focused processor, store every callback in an inbox table, and claim start/apply work through persisted processing states. Preserve the existing business triple unique constraint and retain legacy columns for backward-compatible reads during the `1.1.x` line.
 
-**Tech Stack:** PHP 7.0-compatible syntax, Laravel/Illuminate 5.5-10, Eloquent, Guzzle 6/7, MySQL, PHPUnit 6-9, Orchestra Testbench.
+**Tech Stack:** PHP 7.0-compatible syntax, Laravel/Illuminate 5.5-10, Eloquent, Guzzle 6/7, MySQL, PHPUnit 6-9, Illuminate Database Capsule.
 
 ---
 
@@ -25,9 +25,9 @@
 - `database/sql/workflow_approval_results.sql`: complete schema for new installations.
 - `database/sql/upgrades/1.0.0-to-1.1.0.sql`: additive production upgrade.
 - `database/migrations/2026_08_18_000002_upgrade_workflow_bridge_to_v1_1.php`: migration equivalent.
-- `tests/TestCase.php`: Testbench application and database schema setup.
+- `tests/TestCase.php`: Capsule database container and package schema setup.
 
-### Task 1: Build the Laravel Integration Test Harness
+### Task 1: Build the Illuminate Integration Test Harness
 
 **Files:**
 - Modify: `composer.json`
@@ -57,15 +57,9 @@ Run: `vendor/bin/phpunit tests/DatabaseSchemaTest.php`
 
 Expected: FAIL because the new columns and callback table do not exist.
 
-- [ ] **Step 3: Add Testbench and the package test base**
+- [ ] **Step 3: Add the Capsule package test base**
 
-Add compatible Testbench constraints:
-
-```json
-"orchestra/testbench": "^3.5|^4.0|^5.0|^6.0|^7.0|^8.0"
-```
-
-`tests/TestCase.php` must register `WorkflowBridgeServiceProvider`, use an in-memory SQLite connection, and load both package migrations in `setUp()`.
+`tests/TestCase.php` must configure `Illuminate\Database\Capsule\Manager` with an in-memory SQLite connection, bind the facade container, boot Eloquent, and load both package migrations in `setUp()`.
 
 - [ ] **Step 4: Confirm the test now reaches the schema assertion**
 
@@ -597,4 +591,3 @@ git commit -m "ci: verify workflow bridge compatibility matrix"
 - [ ] **Step 5: Stop before tagging or pushing**
 
 Report the verified commit list and release command recommendation. Do not create `v1.1.0` or push without explicit user instruction.
-
