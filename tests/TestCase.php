@@ -27,6 +27,7 @@ abstract class TestCase extends PHPUnitTestCase
         $database->setEventDispatcher(new Dispatcher($container));
         $database->setAsGlobal();
         $database->bootEloquent();
+        $container->instance('db', $database->getDatabaseManager());
         $container->instance('db.schema', $database->getConnection()->getSchemaBuilder());
         Facade::setFacadeApplication($container);
         $this->database = $database;

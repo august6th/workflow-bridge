@@ -26,7 +26,7 @@ class CallbackVerifier
     public function verify(array $headers, array $payload)
     {
         if ($this->secret === '') {
-            return;
+            throw new RuntimeException('WORKFLOW_CALLBACK_SECRET is empty');
         }
 
         $timestamp = $this->header($headers, 'X-Workflow-Timestamp');

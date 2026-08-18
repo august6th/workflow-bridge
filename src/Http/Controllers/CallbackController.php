@@ -3,11 +3,14 @@
 namespace August6th\WorkflowBridge\Http\Controllers;
 
 use August6th\WorkflowBridge\Callback\CallbackHandler;
-use Exception;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Log;
+use InvalidArgumentException;
+use RuntimeException;
+use Throwable;
 
-class CallbackController extends Controller
+class CallbackController
 {
     /** @var CallbackHandler */
     protected $handler;
@@ -30,7 +33,7 @@ class CallbackController extends Controller
             }
             $result = $this->handler->handle($request->headers->all(), $payload);
 
-            return response()->json([
+            return new JsonResponse([
                 'code' => 20000,
                 'message' => 'success',
                 'data' => [
@@ -39,12 +42,31 @@ class CallbackController extends Controller
                     'workflow_status' => $result->workflow_status,
                 ],
             ]);
-        } catch (Exception $e) {
-            return response()->json([
-                'code' => 40001,
-                'message' => $e->getMessage(),
+        } catch (InvalidArgumentException $exception) {
+            return $this->expectedFailure($exception);
+        } catch (RuntimeException $exception) {
+            return $this->expectedFailure($exception);
+        } catch (Throwable $exception) {
+            Log::error('Workflow callback failed', ['exception' => $exception]);
+
+            return new JsonResponse([
+                'code' => 50000,
+                'message' => 'Workflow callback failed',
                 'data' => null,
-            ], 400);
+            ], 500);
         }
+    }
+
+    /**
+     * @param \Exception $exception
+     * @return JsonResponse
+     */
+    protected function expectedFailure($exception)
+    {
+        return new JsonResponse([
+            'code' => 40001,
+            'message' => $exception->getMessage(),
+            'data' => null,
+        ], 400);
     }
 }

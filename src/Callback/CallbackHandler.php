@@ -3,6 +3,10 @@
 namespace August6th\WorkflowBridge\Callback;
 
 use August6th\WorkflowBridge\Models\WorkflowApprovalResult;
+use August6th\WorkflowBridge\Models\WorkflowCallbackDelivery;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use RuntimeException;
 
 class CallbackHandler
@@ -10,9 +14,13 @@ class CallbackHandler
     /** @var CallbackVerifier */
     protected $verifier;
 
-    public function __construct(CallbackVerifier $verifier)
+    /** @var CallbackPayloadValidator */
+    protected $validator;
+
+    public function __construct(CallbackVerifier $verifier, CallbackPayloadValidator $validator = null)
     {
         $this->verifier = $verifier;
+        $this->validator = $validator ?: new CallbackPayloadValidator();
     }
 
     /**
@@ -31,66 +39,90 @@ class CallbackHandler
         if ($idempotencyKey === '') {
             throw new RuntimeException('Missing workflow callback idempotency key');
         }
+        $payload['idempotency_key'] = $idempotencyKey;
 
-        $existing = WorkflowApprovalResult::where('idempotency_key', $idempotencyKey)->first();
-        if ($existing) {
-            return $existing;
-        }
-
-        $businessKey = isset($payload['business_key']) ? (string) $payload['business_key'] : '';
-        $ownerSystem = isset($payload['owner_system']) ? (string) $payload['owner_system'] : '';
-        $processCode = isset($payload['process_code']) ? (string) $payload['process_code'] : '';
-        $result = isset($payload['result']) ? (string) $payload['result'] : '';
-        $resultValue = isset($payload['result_value']) ? (string) $payload['result_value'] : $result;
-        $instanceUuid = isset($payload['instance_uuid']) ? (string) $payload['instance_uuid'] : '';
         $deliveryId = $this->header($headers, 'X-Workflow-Delivery-Id');
         if ($deliveryId === '' && isset($payload['delivery_id'])) {
-            $deliveryId = (string) $payload['delivery_id'];
+            $deliveryId = $payload['delivery_id'];
         }
-        $finishedAt = isset($payload['finished_at']) ? (string) $payload['finished_at'] : date('Y-m-d H:i:s');
-        $now = date('Y-m-d H:i:s');
+        $payload['delivery_id'] = $deliveryId;
+        $this->validator->validate($payload);
 
-        $row = null;
-        if ($businessKey !== '' && $ownerSystem !== '' && $processCode !== '') {
-            $row = WorkflowApprovalResult::where('business_key', $businessKey)
-                ->where('owner_system', $ownerSystem)
-                ->where('process_code', $processCode)
-                ->first();
+        $existingDelivery = WorkflowCallbackDelivery::where('idempotency_key', $idempotencyKey)->first();
+        if ($existingDelivery) {
+            return WorkflowApprovalResult::where('id', $existingDelivery->approval_result_id)->firstOrFail();
         }
 
-        if (!$row && $instanceUuid !== '') {
-            $row = WorkflowApprovalResult::where('instance_uuid', $instanceUuid)->first();
-        }
+        try {
+            return DB::transaction(function () use ($payload, $idempotencyKey, $deliveryId) {
+                $existingDelivery = WorkflowCallbackDelivery::where('idempotency_key', $idempotencyKey)
+                    ->lockForUpdate()
+                    ->first();
+                if ($existingDelivery) {
+                    return WorkflowApprovalResult::where('id', $existingDelivery->approval_result_id)->firstOrFail();
+                }
 
-        if (!$row) {
-            $row = new WorkflowApprovalResult();
-            $row->business_key = $businessKey;
-            $row->owner_system = $ownerSystem;
-            $row->process_code = $processCode;
-            $row->started_at = $now;
-            $row->created_at = $now;
-            $row->local_apply_status = WorkflowApprovalResult::APPLY_PENDING;
-        }
+                $row = WorkflowApprovalResult::where('business_key', $payload['business_key'])
+                    ->where('owner_system', $payload['owner_system'])
+                    ->where('process_code', $payload['process_code'])
+                    ->lockForUpdate()
+                    ->first();
+                if (!$row) {
+                    throw new InvalidArgumentException('Workflow callback business record not found');
+                }
+                if ($row->instance_uuid !== $payload['instance_uuid']) {
+                    throw new InvalidArgumentException('Workflow callback instance does not match business record');
+                }
+                if ($row->isTerminal() && $row->workflow_status !== $payload['result']) {
+                    throw new InvalidArgumentException('Workflow callback cannot overwrite terminal result');
+                }
 
-        $row->instance_uuid = $instanceUuid !== '' ? $instanceUuid : (string) $row->instance_uuid;
-        $row->workflow_status = in_array($result, [
-            WorkflowApprovalResult::STATUS_APPROVED,
-            WorkflowApprovalResult::STATUS_REJECTED,
-        ], true) ? $result : WorkflowApprovalResult::STATUS_WAITING;
-        $row->result = $result;
-        $row->result_value = $resultValue;
-        $row->idempotency_key = $idempotencyKey;
-        $row->delivery_id = $deliveryId;
-        $row->callback_payload_json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $row->start_error = '';
-        $row->finished_at = $finishedAt !== '' ? $finishedAt : $now;
-        $row->updated_at = $now;
-        if ($row->local_apply_status === '' || $row->local_apply_status === null) {
-            $row->local_apply_status = WorkflowApprovalResult::APPLY_PENDING;
-        }
-        $row->save();
+                $now = date('Y-m-d H:i:s');
+                $delivery = new WorkflowCallbackDelivery();
+                $delivery->approval_result_id = $row->id;
+                $delivery->business_key = $payload['business_key'];
+                $delivery->owner_system = $payload['owner_system'];
+                $delivery->process_code = $payload['process_code'];
+                $delivery->instance_uuid = $payload['instance_uuid'];
+                $delivery->event = $payload['event'];
+                $delivery->result = $payload['result'];
+                $delivery->result_value = isset($payload['result_value']) ? $payload['result_value'] : $payload['result'];
+                $delivery->idempotency_key = $idempotencyKey;
+                $delivery->delivery_id = $deliveryId;
+                $delivery->payload_json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                $delivery->received_at = $now;
+                $delivery->created_at = $now;
+                $delivery->updated_at = $now;
+                $delivery->save();
 
-        return $row;
+                $wasTerminal = $row->isTerminal();
+                $row->start_status = WorkflowApprovalResult::START_SUCCEEDED;
+                $row->workflow_status = $payload['result'];
+                $row->result = $payload['result'];
+                $row->result_value = $delivery->result_value;
+                $row->delivery_id = $deliveryId;
+                $row->callback_payload_json = $delivery->payload_json;
+                $row->start_error = '';
+                $row->finished_at = isset($payload['finished_at']) && $payload['finished_at'] !== ''
+                    ? $payload['finished_at']
+                    : $now;
+                if (!$wasTerminal) {
+                    $row->local_apply_status = WorkflowApprovalResult::APPLY_PENDING;
+                    $row->apply_next_retry_at = $now;
+                }
+                $row->updated_at = $now;
+                $row->save();
+
+                return $row->fresh();
+            });
+        } catch (QueryException $exception) {
+            $existingDelivery = WorkflowCallbackDelivery::where('idempotency_key', $idempotencyKey)->first();
+            if ($existingDelivery) {
+                return WorkflowApprovalResult::where('id', $existingDelivery->approval_result_id)->firstOrFail();
+            }
+
+            throw $exception;
+        }
     }
 
     /**

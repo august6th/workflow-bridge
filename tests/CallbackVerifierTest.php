@@ -51,6 +51,15 @@ class CallbackVerifierTest extends TestCase
         ], $payload);
     }
 
+    public function testVerifyRejectsEmptySecret()
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('WORKFLOW_CALLBACK_SECRET is empty');
+
+        $verifier = new CallbackVerifier('', 300);
+        $verifier->verify([], ['idempotency_key' => 'k1']);
+    }
+
     public function testStartIdempotencyKeyIsStableHash()
     {
         $this->assertSame(

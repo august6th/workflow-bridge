@@ -4,6 +4,7 @@ namespace August6th\WorkflowBridge;
 
 use August6th\WorkflowBridge\Bridge\WorkflowBridge;
 use August6th\WorkflowBridge\Callback\CallbackHandler;
+use August6th\WorkflowBridge\Callback\CallbackPayloadValidator;
 use August6th\WorkflowBridge\Callback\CallbackVerifier;
 use August6th\WorkflowBridge\Client\WorkflowClient;
 use August6th\WorkflowBridge\Console\ApplyResultsCommand;
@@ -51,7 +52,14 @@ class WorkflowBridgeServiceProvider extends ServiceProvider
         });
 
         $this->app->singleton(CallbackHandler::class, function ($app) {
-            return new CallbackHandler($app->make(CallbackVerifier::class));
+            return new CallbackHandler(
+                $app->make(CallbackVerifier::class),
+                $app->make(CallbackPayloadValidator::class)
+            );
+        });
+
+        $this->app->singleton(CallbackPayloadValidator::class, function () {
+            return new CallbackPayloadValidator();
         });
 
         $this->app->singleton(WorkflowBridge::class, function ($app) {
