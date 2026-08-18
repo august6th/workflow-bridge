@@ -51,4 +51,4 @@
 - [x] Run `vendor/bin/phpunit` and require zero failures.
 - [x] Run PHP syntax checks for `src`, `config`, `database/migrations`, and `tests`.
 - [x] Run `git diff --check` and inspect `git status --short`.
-- [ ] Commit the complete change to `main` with `feat: simplify workflow bridge configuration`.
+- [x] Commit the complete change to `main` with `feat: simplify workflow bridge configuration`.
