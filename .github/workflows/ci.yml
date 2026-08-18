@@ -7,15 +7,82 @@ on:
 
 jobs:
   test:
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        php: ['7.4', '8.1']
+        include:
+          - name: PHP 7.0 / Illuminate 5.5
+            php: '7.0'
+            composer: '2.2'
+            illuminate: '5.5.*'
+            guzzle: '^6.5.8'
+            phpunit: '^6.5'
+            dotenv: '^2.6'
+          - name: PHP 7.4 / Illuminate 5.5
+            php: '7.4'
+            composer: '2.2'
+            illuminate: '5.5.*'
+            guzzle: '^6.5.8'
+            phpunit: '^8.5'
+            dotenv: '^2.6'
+          - name: PHP 8.1 / Illuminate 10
+            php: '8.1'
+            composer: '2'
+            illuminate: '^10.0'
+            guzzle: '^7.0'
+            phpunit: '^9.6'
+            dotenv: '^5.5'
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
+          extensions: pdo_sqlite, sqlite3
           coverage: none
-      - run: composer install --no-interaction --prefer-dist
-      - run: vendor/bin/phpunit --bootstrap vendor/autoload.php tests
+          tools: composer:${{ matrix.composer }}
+      - name: Pin dependency boundary
+        run: |
+          composer require --no-update \
+            "guzzlehttp/guzzle:${{ matrix.guzzle }}" \
+            "illuminate/bus:${{ matrix.illuminate }}" \
+            "illuminate/console:${{ matrix.illuminate }}" \
+            "illuminate/database:${{ matrix.illuminate }}" \
+            "illuminate/http:${{ matrix.illuminate }}" \
+            "illuminate/queue:${{ matrix.illuminate }}" \
+            "illuminate/support:${{ matrix.illuminate }}"
+          composer require --dev --no-update \
+            "phpunit/phpunit:${{ matrix.phpunit }}" \
+            "vlucas/phpdotenv:${{ matrix.dotenv }}"
+      - run: composer update --no-interaction --prefer-dist
+      - run: composer validate --strict
+      - run: vendor/bin/phpunit
+
+  mysql-schema:
+    name: MySQL 8 schema
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: workflow_bridge
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Execute final DDL
+        run: |
+          docker exec -i ${{ job.services.mysql.id }} \
+            mysql -uroot -proot workflow_bridge \
+            < database/sql/workflow_approval_results.sql
+      - name: Verify tables and nullable lifecycle timestamps
+        run: |
+          test "$(docker exec ${{ job.services.mysql.id }} mysql -N -uroot -proot workflow_bridge -e "SHOW TABLES LIKE 'workflow_approval_results'")" = "workflow_approval_results"
+          test "$(docker exec ${{ job.services.mysql.id }} mysql -N -uroot -proot workflow_bridge -e "SHOW TABLES LIKE 'workflow_callback_deliveries'")" = "workflow_callback_deliveries"
+          test "$(docker exec ${{ job.services.mysql.id }} mysql -N -uroot -proot workflow_bridge -e "SELECT IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='workflow_bridge' AND TABLE_NAME='workflow_approval_results' AND COLUMN_NAME='finished_at'")" = "YES"
+          test "$(docker exec ${{ job.services.mysql.id }} mysql -N -uroot -proot workflow_bridge -e "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='workflow_bridge' AND COLUMN_DEFAULT LIKE '1970-01-01%'")" = "0"

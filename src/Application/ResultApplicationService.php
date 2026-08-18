@@ -152,8 +152,8 @@ class ResultApplicationService
             ? WorkflowApprovalResult::APPLY_APPLIED
             : WorkflowApprovalResult::APPLY_SKIPPED;
         $result->local_apply_error = '';
-        $result->apply_next_retry_at = '9999-12-31 23:59:59';
-        $result->apply_processing_at = '1970-01-01 00:00:00';
+        $result->apply_next_retry_at = null;
+        $result->apply_processing_at = null;
         $result->applied_at = $now;
         $result->updated_at = $now;
         $result->save();
@@ -183,7 +183,7 @@ class ResultApplicationService
         $result->local_apply_status = WorkflowApprovalResult::APPLY_FAILED;
         $result->local_apply_error = $this->truncate($exception->getMessage(), 1000);
         $result->apply_next_retry_at = date('Y-m-d H:i:s', $now + $retrySeconds);
-        $result->apply_processing_at = '1970-01-01 00:00:00';
+        $result->apply_processing_at = null;
         $result->updated_at = date('Y-m-d H:i:s', $now);
         $result->save();
 

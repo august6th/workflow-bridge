@@ -1,5 +1,7 @@
 # Workflow Bridge Reliability Design
 
+> 2026-08-18 scope update: the project has not gone live. The database contract is consolidated into one final install SQL and one create migration. No `1.0.0 -> 1.1.0` upgrade artifact is retained, and lifecycle timestamps use `NULL` before the event occurs.
+
 ## 目标
 
 将 `workflow-bridge` 收敛为 ERP 业务系统接入 Workflow 的可靠单实例桥接包，解决发布版本、发起补偿、回调安全、回调审计和业务结果应用的可靠性问题。
@@ -22,7 +24,7 @@ owner_system + process_code + business_key
 - 发起、Workflow、业务应用三段状态
 - 安全的回调契约校验
 - 并发安全的结果应用与失败重试
-- 从 `1.0.0` 升级的增量 SQL
+- 上线前汇总后的最终建表 SQL
 - Laravel 5.5 兼容测试和新版本发布准备
 
 本次不包括：
@@ -55,6 +57,8 @@ local_apply_status: pending / processing / applied / skipped / failed
 - `apply_attempts`：业务结果应用次数
 - `apply_next_retry_at`：下次允许应用时间
 - `apply_processing_at`：应用任务抢占时间
+
+上述重试、抢占时间以及 `started_at`、`finished_at`、`applied_at` 在尚未发生或当前无调度时为 `NULL`，不使用 `1970-01-01` 或 `9999-12-31` 哨兵值。
 
 保留业务三元组唯一索引。`instance_uuid` 在非空值场景下保持唯一语义，但 MySQL 空字符串无法使用普通唯一索引，因此由业务三元组和写入逻辑共同约束。
 
@@ -119,25 +123,19 @@ local_apply_status: pending / processing / applied / skipped / failed
 - `mapResultsByBusinessKeys()` 必须指定 `process_code`，避免同一业务键在不同流程之间互相覆盖。
 - 状态展示分别读取发起状态、Workflow 状态和应用状态，不再把 `start_failed` 混入 Workflow 状态。
 
-## 升级策略
+## 数据库交付策略
 
-提供：
+项目未上线，直接交付最终结构：
 
-- 新安装使用的完整建表 SQL
-- `database/sql/upgrades/1.0.0-to-1.1.0.sql`
-- 对应 Laravel migration
+- `database/sql/workflow_approval_results.sql` 同时创建结果投影表和回调投递表
+- `database/migrations/2026_08_18_000001_create_workflow_approval_results_table.php` 与 SQL 等价
+- 不保留历史增量 SQL或第二份升级 migration
 
-升级脚本先新增字段和回调投递表，再回填旧状态：
-
-- `workflow_status=start_failed` 转为 `start_status=failed`、`workflow_status=not_started`
-- 已有实例或运行/终态记录转为 `start_status=succeeded`
-- 旧回调字段迁移为一条历史投递记录，仅在幂等键不是 `start:` 前缀且 payload 存在时执行
-
-脚本必须可重复执行或在执行前明确检测结构，且不删除旧字段，避免回滚和旧代码读取失败。
+若开发库执行过试验版 DDL 且没有保留数据的需要，删除两张表后重建。正式上线后才开始冻结建表语义，并为后续版本单独提供增量 SQL。
 
 ## 发布策略
 
-现有 `v1.0.0` tag 不修改。新实现发布为 `v1.1.0`，因为包含新增表、字段和状态语义。发布前确认 tag 指向包含通用 Job、升级 SQL和测试的提交，并确认发布树不包含 `vendor`、`composer.lock` 或本地密钥。
+现有 `v1.0.0` tag 不修改。新实现发布为 `v1.1.0`。发布前确认 tag 指向包含通用 Job、最终 DDL 和测试的提交，并确认发布树不包含 `vendor`、`composer.lock` 或本地密钥。
 
 ## 测试
 
@@ -150,7 +148,7 @@ local_apply_status: pending / processing / applied / skipped / failed
 - 重复回调幂等、迟到回调不覆盖终态
 - 两个应用进程只能抢占一次
 - 应用失败按退避时间重试
-- `1.0.0` 数据升级后的状态和历史回调正确
+- 单一 migration 与单一 SQL 的字段、索引和可空时间语义一致
 
 ## 验收标准
 
@@ -159,4 +157,4 @@ local_apply_status: pending / processing / applied / skipped / failed
 - 未配置回调密钥时无法写入审批结果
 - 每次回调投递均有独立审计记录
 - 并发执行命令不会同时应用同一审批结果
-- 已安装 `1.0.0` 的 ERP 可以通过增量 SQL 无损升级
+- 未上线项目可以直接使用单一最终 DDL 完成初始化

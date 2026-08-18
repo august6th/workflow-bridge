@@ -169,7 +169,8 @@ class StartWorkflowProcessor
             ? $instance['status']
             : WorkflowApprovalResult::STATUS_RUNNING;
         $result->start_error = '';
-        $result->start_next_retry_at = '9999-12-31 23:59:59';
+        $result->start_next_retry_at = null;
+        $result->start_processing_at = null;
         $result->started_at = isset($instance['started_at']) && $instance['started_at'] !== ''
             ? $instance['started_at']
             : $now;
@@ -202,6 +203,7 @@ class StartWorkflowProcessor
         $result->workflow_status = WorkflowApprovalResult::STATUS_NOT_STARTED;
         $result->start_error = $this->truncate($exception->getMessage(), 1000);
         $result->start_next_retry_at = date('Y-m-d H:i:s', $now + $retrySeconds);
+        $result->start_processing_at = null;
         $result->updated_at = date('Y-m-d H:i:s', $now);
         $result->save();
 

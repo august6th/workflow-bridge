@@ -1,8 +1,10 @@
 # Workflow Bridge Reliability Implementation Plan
 
+> **Scope update (2026-08-18):** The project has not gone live. Database work is consolidated into one final install SQL and one create migration. References below to an additive `1.0.0 -> 1.1.0` upgrade are superseded by this decision.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Upgrade `workflow-bridge` to a production-ready single-instance ERP bridge with durable start requests, secure callback receipts, explicit state transitions, retryable result application, and a lossless `1.0.0` to `1.1.0` database upgrade.
+**Goal:** Prepare `workflow-bridge` as a production-ready single-instance ERP bridge with durable start requests, secure callback receipts, explicit state transitions, retryable result application, and one final pre-launch database definition.
 
 **Architecture:** Keep `WorkflowBridge` as the public facade, move remote-start state transitions into a focused processor, store every callback in an inbox table, and claim start/apply work through persisted processing states. Preserve the existing business triple unique constraint and retain legacy columns for backward-compatible reads during the `1.1.x` line.
 
@@ -23,8 +25,7 @@
 - `src/Console/RetryFailedStartsCommand.php`: process due start requests.
 - `src/Console/ApplyResultsCommand.php`: process due business applications.
 - `database/sql/workflow_approval_results.sql`: complete schema for new installations.
-- `database/sql/upgrades/1.0.0-to-1.1.0.sql`: additive production upgrade.
-- `database/migrations/2026_08_18_000002_upgrade_workflow_bridge_to_v1_1.php`: migration equivalent.
+- `database/migrations/2026_08_18_000001_create_workflow_approval_results_table.php`: complete create migration equivalent to the install SQL.
 - `tests/TestCase.php`: Capsule database container and package schema setup.
 
 ### Task 1: Build the Illuminate Integration Test Harness
@@ -59,7 +60,7 @@ Expected: FAIL because the new columns and callback table do not exist.
 
 - [ ] **Step 3: Add the Capsule package test base**
 
-`tests/TestCase.php` must configure `Illuminate\Database\Capsule\Manager` with an in-memory SQLite connection, bind the facade container, boot Eloquent, and load both package migrations in `setUp()`.
+`tests/TestCase.php` must configure `Illuminate\Database\Capsule\Manager` with an in-memory SQLite connection, bind the facade container, boot Eloquent, and load the single package create migration in `setUp()`.
 
 - [ ] **Step 4: Confirm the test now reaches the schema assertion**
 
@@ -74,14 +75,13 @@ git add composer.json phpunit.xml tests/TestCase.php tests/DatabaseSchemaTest.ph
 git commit -m "test: add workflow bridge integration harness"
 ```
 
-### Task 2: Add the 1.1 Schema and Explicit State Model
+### Task 2: Add the Final Schema and Explicit State Model
 
 **Files:**
 - Modify: `src/Models/WorkflowApprovalResult.php`
 - Create: `src/Models/WorkflowCallbackDelivery.php`
 - Modify: `database/sql/workflow_approval_results.sql`
-- Create: `database/sql/upgrades/1.0.0-to-1.1.0.sql`
-- Create: `database/migrations/2026_08_18_000002_upgrade_workflow_bridge_to_v1_1.php`
+- Modify: `database/migrations/2026_08_18_000001_create_workflow_approval_results_table.php`
 - Modify: `tests/DatabaseSchemaTest.php`
 
 - [ ] **Step 1: Add failing model-state tests**
@@ -140,9 +140,9 @@ public static function startIdempotencyKey($ownerSystem, $processCode, $business
 }
 ```
 
-- [ ] **Step 4: Add the additive schema**
+- [ ] **Step 4: Consolidate the final pre-launch schema**
 
-Add non-null/defaulted columns with Chinese comments. Create `workflow_callback_deliveries` with a unique named index on `idempotency_key`, lookup indexes on `approval_result_id` and `instance_uuid`, and no foreign key so DBA-operated ERP databases remain easy to upgrade.
+Create both tables in the single install SQL and create migration. Add Chinese comments, named indexes, and no foreign key. Lifecycle, retry, and processing timestamps are nullable until they occur; audit creation timestamps remain non-null.
 
 Backfill rules in both SQL and migration:
 
@@ -521,9 +521,9 @@ app(WorkflowBridge::class)->dispatchProcess($processCode, $businessKey, [
 
 Document scheduler entries for retry-start and apply-results, CSRF/middleware exclusions for callback routes, fail-closed callback secrets, and host `ResultApplier` idempotency.
 
-- [ ] **Step 4: Document the exact 1.0.0 upgrade sequence**
+- [ ] **Step 4: Document the pre-launch schema reset rule**
 
-State that ERP projects run `database/sql/upgrades/1.0.0-to-1.1.0.sql`, deploy package code only after SQL succeeds, verify backfilled status counts, and retain old columns through all `1.1.x` releases.
+State that there is one final DDL. Development databases using experimental schemas may drop and recreate both tables only when no data must be retained; production upgrades begin only after the first live release.
 
 - [ ] **Step 5: Update changelog for 1.1.0**
 
@@ -554,7 +554,7 @@ git commit -m "docs: document workflow bridge 1.1 operations"
 
 - [ ] **Step 1: Expand CI to test the supported boundaries**
 
-Use explicit dependency jobs so PHP 7.0/7.4 tests Illuminate 5.5 and PHP 8.1 tests Illuminate 10. Do not rely on Composer selecting an arbitrary highest compatible version. Add MySQL service coverage for the upgrade SQL while retaining SQLite for fast tests.
+Use explicit dependency jobs so PHP 7.0/7.4 tests Illuminate 5.5 and PHP 8.1 tests Illuminate 10. Do not rely on Composer selecting an arbitrary highest compatible version. Add MySQL service coverage for the final install SQL while retaining SQLite for fast tests.
 
 - [ ] **Step 2: Run the complete local verification suite**
 

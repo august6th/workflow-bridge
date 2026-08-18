@@ -13,7 +13,7 @@ class RetryFailedStartsCommand extends Command
         {--business-key=* : business_key list}
         {--limit=100 : max rows}';
 
-    protected $description = 'Retry workflow starts that are in start_failed status';
+    protected $description = 'Retry due workflow starts in pending or failed start status';
 
     public function handle(WorkflowBridge $bridge)
     {

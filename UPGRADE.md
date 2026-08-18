@@ -1,14 +1,26 @@
 # Upgrade Guide
 
-## 从开发副本升级到 1.0.x
+## 当前阶段
 
-1. 业务项目将依赖改为 `"august6th/workflow-bridge": "^1.0"`。
-2. `composer update august6th/workflow-bridge --with-dependencies`。
-3. 若有新增 migration，执行 `php artisan migrate`（包不会自动跑迁移）。
-4. 对比 `config/workflow-bridge.php` 与 publish 后的本地配置，补齐新增环境变量。
+项目尚未上线，`workflow-bridge` 使用一份最终建表定义，不提供历史增量 SQL：
 
-## 兼容承诺
+```text
+database/sql/workflow_approval_results.sql
+database/migrations/2026_08_18_000001_create_workflow_approval_results_table.php
+```
 
-- `1.0.x`：不改公共方法签名与表语义。
-- `1.x`：可新增字段（必须有默认值）与向后兼容 API。
-- `2.x`：不兼容变更，本文件会补充迁移步骤。
+如果开发库曾执行过早期试验版 DDL，且确认没有需要保留的数据，可以删除以下两张表后重新执行最终 SQL：
+
+```sql
+DROP TABLE IF EXISTS `workflow_callback_deliveries`;
+DROP TABLE IF EXISTS `workflow_approval_results`;
+```
+
+存在需要保留的数据时不要直接删除，由 DBA 根据最终 DDL 单独制定迁移脚本。
+
+## 上线后规则
+
+- 已发布版本的建表 SQL 和 migration 不再修改语义。
+- 新字段、新索引或状态迁移必须提供独立、可回滚评估的增量 SQL。
+- 先完成数据库变更和校验，再部署依赖新字段的包代码。
+- Composer 库版本由 Git tag 决定，不在 `composer.json` 写 `version`。

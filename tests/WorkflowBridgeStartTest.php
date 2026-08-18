@@ -75,6 +75,8 @@ class WorkflowBridgeStartTest extends TestCase
         $this->assertSame('pi_a003', $result->instance_uuid);
         $this->assertSame(3, $result->process_version);
         $this->assertSame(1, $result->start_attempts);
+        $this->assertNull($result->start_next_retry_at);
+        $this->assertNull($result->start_processing_at);
     }
 
     public function testTimeoutQueryRecoveryMarksStartSucceeded()

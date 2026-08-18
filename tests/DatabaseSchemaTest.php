@@ -3,6 +3,7 @@
 namespace August6th\WorkflowBridge\Tests;
 
 use August6th\WorkflowBridge\Models\WorkflowApprovalResult;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class DatabaseSchemaTest extends TestCase
@@ -38,5 +39,37 @@ class DatabaseSchemaTest extends TestCase
         $this->assertSame('failed', WorkflowApprovalResult::START_FAILED);
         $this->assertSame('not_started', WorkflowApprovalResult::STATUS_NOT_STARTED);
         $this->assertSame('processing', WorkflowApprovalResult::APPLY_PROCESSING);
+    }
+
+    public function testSchemaUsesNullForTimestampsThatHaveNotOccurred()
+    {
+        $columns = collect(DB::select("PRAGMA table_info('workflow_approval_results')"))->keyBy('name');
+
+        foreach ([
+            'start_next_retry_at',
+            'start_processing_at',
+            'apply_next_retry_at',
+            'apply_processing_at',
+            'started_at',
+            'finished_at',
+            'applied_at',
+        ] as $column) {
+            $this->assertSame(0, (int) $columns->get($column)->notnull, $column . ' should be nullable');
+        }
+        $this->assertSame(1, (int) $columns->get('created_at')->notnull);
+        $this->assertSame(1, (int) $columns->get('updated_at')->notnull);
+    }
+
+    public function testDatabaseDefinitionIsConsolidatedWithoutSentinelDates()
+    {
+        $migrationFiles = glob(__DIR__ . '/../database/migrations/*.php');
+        $upgradeSqlFiles = glob(__DIR__ . '/../database/sql/upgrades/*.sql');
+        $sql = file_get_contents(__DIR__ . '/../database/sql/workflow_approval_results.sql');
+
+        $this->assertCount(1, $migrationFiles);
+        $this->assertCount(0, $upgradeSqlFiles);
+        $this->assertSame(false, strpos($sql, '1970-01-01'));
+        $this->assertSame(false, strpos($sql, '9999-12-31'));
+        $this->assertNotSame(false, strpos($sql, '`finished_at` datetime NULL DEFAULT NULL'));
     }
 }

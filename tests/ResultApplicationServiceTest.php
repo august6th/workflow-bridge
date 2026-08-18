@@ -36,7 +36,9 @@ class ResultApplicationServiceTest extends TestCase
         $this->assertSame(WorkflowApprovalResult::APPLY_APPLIED, $applied->local_apply_status);
         $this->assertSame('', $applied->local_apply_error);
         $this->assertSame(1, $applied->apply_attempts);
-        $this->assertNotSame('1970-01-01 00:00:00', $applied->applied_at);
+        $this->assertNotNull($applied->applied_at);
+        $this->assertNull($applied->apply_next_retry_at);
+        $this->assertNull($applied->apply_processing_at);
     }
 
     public function testFalseResultBecomesSkipped()

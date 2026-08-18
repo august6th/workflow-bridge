@@ -1,51 +1,66 @@
-# IC 审版双轨接入 Workflow
+# IC 审版接入 Workflow
 
-## 业务目标
+## 业务约束
 
-审版单创建成功、进入「可开始审版」后，自动向 Workflow 发起流程实例；IC 原审版保持不变。Workflow 结果写入 `workflow_approval_results`，前期不回写 `ic_product_skc_approval`。
-
-## 建表（ERP 不用 migrate）
-
-在 IC 业务库执行：
-
-`database/sql/workflow_approval_results.sql`
-
-## Workflow 平台配置
-
-1. 发布流程，`process_code` 与 IC `WORKFLOW_SKC_APPROVAL_PROCESS_CODE` 一致（默认 `skc_approval`）。
-2. 创建业务回调资产：
-   - URL：`https://<ic-host>/workflow/callback`
-   - `secret`：与 IC `WORKFLOW_CALLBACK_SECRET` 相同
-3. 绑定到流程终态交付。
-4. 创建接入身份，授予 `workflow:external:start`、`workflow:external:view`。
-5. `WORKFLOW_SSO_SECRET` 与 Workflow `web/.env` 一致。
-6. 生产环境运行 `workflow-callbacks-0..3` 队列 worker。
-
-## IC 安装
-
-见 [PUBLISH_AND_IC_INSTALL.md](PUBLISH_AND_IC_INSTALL.md)。
-
-IC 创建审版单后直接派发包内通用 Job：
-
-```php
-dispatch(new StartWorkflowProcessJob(
-    $processCode,
-    $approvalNo,
-    [
-        'owner_system' => 'ic',
-        'business_payload' => $payload,
-        'input' => $payload,
-    ]
-));
-```
-
-后续其他审核流也使用 `StartWorkflowProcessJob`，不再新增业务专用 Job。
-
-## 同步状态
+审版单以以下三元组唯一对应一个 Workflow 实例：
 
 ```text
-workflow_approval_results.business_key = approval_no
-  无行 / start_failed → 可 workflow:retry-start
-  waiting → 审批中
-  approved / rejected → 终态（映射脚本启用前不写回业务表）
+ic + skc_approval + approval_no
 ```
+
+重复触发不会创建第二个流程实例。Workflow 结果先写入桥接表，再由 IC 的 `ResultApplier` 幂等回填业务表。
+
+## 建表
+
+项目尚未上线，IC 业务库只执行最终 DDL：
+
+```text
+database/sql/workflow_approval_results.sql
+```
+
+它会同时创建 `workflow_approval_results` 和 `workflow_callback_deliveries`。
+
+## Workflow 配置
+
+1. 发布 `process_code=skc_approval` 的流程。
+2. 创建业务回调资产，URL 为 `https://<ic-host>/workflow/callback`。
+3. 回调 secret 与 IC 的 `WORKFLOW_CALLBACK_SECRET` 完全一致。
+4. 将回调绑定到流程终态交付。
+5. 接入身份授予 `workflow:external:start`、`workflow:external:view`。
+6. `WORKFLOW_SSO_SECRET` 与 Workflow 服务端配置一致。
+
+## IC 发起
+
+```php
+use August6th\WorkflowBridge\Bridge\WorkflowBridge;
+
+app(WorkflowBridge::class)->dispatchProcess($processCode, $approvalNo, [
+    'owner_system' => 'ic',
+    'business_payload' => $payload,
+    'input' => $payload,
+]);
+```
+
+不要直接构造 `StartWorkflowProcessJob`；公开入口会先持久化记录，再派发只携带记录 ID 的 Job。
+
+## 状态判断
+
+```text
+start_status=pending/processing  -> 等待发起或正在发起
+start_status=failed              -> 可由 workflow:retry-start 重试
+workflow_status=waiting          -> 审批中
+workflow_status=approved/rejected -> Workflow 终态
+local_apply_status=pending/failed -> 等待或重试回填 IC
+local_apply_status=applied/skipped -> 本地处理完成
+```
+
+`started_at`、`finished_at`、`applied_at` 等尚未发生时为 `NULL`。
+
+## 调度
+
+```php
+$schedule->command('workflow:retry-start --process=skc_approval --owner=ic')->everyMinute();
+$schedule->command('workflow:apply-results --process=skc_approval --owner=ic')->everyMinute();
+```
+
+回调路由必须排除 IC 登录鉴权、内部 signature 中间件和 CSRF 校验。
