@@ -16,14 +16,14 @@ git ls-files | rg '^(vendor/|composer\.lock$|\.env$)'
 
 ## 版本
 
-Composer 库版本由 Git tag 决定，不在 `composer.json` 写 `version`。当前可靠性版本准备发布为 `v1.1.0`；没有明确发布指令前不要创建 tag 或 push。
+Composer 库版本由 Git tag 决定，不在 `composer.json` 写 `version`。当前可靠性版本准备发布为 `v1.2.0`；没有明确发布指令前不要创建 tag 或 push。
 
 发布时：
 
 ```bash
-git tag -a v1.1.0 -m "v1.1.0"
+git tag -a v1.2.0 -m "v1.2.0"
 git push origin main
-git push origin v1.1.0
+git push origin v1.2.0
 ```
 
 ## ERP 安装
@@ -39,7 +39,7 @@ git push origin v1.1.0
     }
   ],
   "require": {
-    "august6th/workflow-bridge": "^1.1"
+    "august6th/workflow-bridge": "^1.2"
   }
 }
 ```

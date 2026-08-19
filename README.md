@@ -22,7 +22,7 @@ owner_system + process_code + business_key
 ## 安装
 
 ```bash
-composer require august6th/workflow-bridge:^1.1
+composer require august6th/workflow-bridge:^1.2
 ```
 
 Laravel 5.5 未自动发现时，在 `config/app.php` 注册：

@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.1.0 - Unreleased
+## 1.2.0 - 2026-08-19
+
+### Fixed
+
+- 回调控制器改为基于原始 JSON body 验签，避免 Laravel 全局 `ConvertEmptyStringsToNull` / `TrimStrings` 将 payload 中的空字符串改写后导致 `Invalid workflow callback signature`
+
+## 1.1.0 - 2026-08-19
 
 ### Added
 

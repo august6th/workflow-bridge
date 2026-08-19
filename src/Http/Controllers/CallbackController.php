@@ -27,10 +27,7 @@ class CallbackController
     public function __invoke(Request $request)
     {
         try {
-            $payload = $request->all();
-            if (!is_array($payload)) {
-                $payload = [];
-            }
+            $payload = $this->resolveCallbackPayload($request);
             $result = $this->handler->handle($request->headers->all(), $payload);
 
             return new JsonResponse([
@@ -55,6 +52,25 @@ class CallbackController
                 'data' => null,
             ], 500);
         }
+    }
+
+    /**
+     * @param Request $request
+     * @return array
+     */
+    protected function resolveCallbackPayload(Request $request)
+    {
+        $content = (string) $request->getContent();
+        if ($content !== '') {
+            $decoded = json_decode($content, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        $payload = $request->all();
+
+        return is_array($payload) ? $payload : [];
     }
 
     /**
