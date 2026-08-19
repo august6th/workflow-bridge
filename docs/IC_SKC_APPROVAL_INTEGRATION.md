@@ -29,7 +29,7 @@ database/sql/workflow_approval_results.sql
 5. 首次 SSO 登录会创建 `ic_workflow_bridge` 接入身份，为其授予 `workflow:external:start`、`workflow:external:view`。
 6. `WORKFLOW_SSO_SECRET` 与 Workflow 服务端配置一致。
 
-IC 只需配置 `WORKFLOW_BASE_URL`、`WORKFLOW_SSO_SECRET`、`WORKFLOW_CALLBACK_SECRET` 和 `WORKFLOW_OWNER_SYSTEM=ic`。流程编码直接作为方法参数传入，租约与重试参数使用包内默认值。
+IC 的 `.env` 和 `.env.example` 只需保留 `WORKFLOW_BASE_URL`、`WORKFLOW_SSO_SECRET`、`WORKFLOW_CALLBACK_SECRET` 和 `WORKFLOW_OWNER_SYSTEM=ic`。流程编码直接作为方法参数传入；租约与重试参数虽支持 `env()` 覆盖，但默认无需列出。
 
 ## IC 发起
 

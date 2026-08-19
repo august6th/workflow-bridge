@@ -65,7 +65,7 @@ WORKFLOW_OWNER_SYSTEM=ic
 
 客户端身份由 `WORKFLOW_OWNER_SYSTEM` 自动生成。例如 `ic` 对应 `external_user_id` 和 `user_name` 均为 `ic_workflow_bridge`，展示名为 `IC Workflow Bridge`。流程编码由 `dispatchProcess()` 等方法直接传入，不需要环境变量。
 
-租约、重试、验签时间窗口、HTTP 超时和 token 缓存使用包内默认值。高级场景可以在发布后的 `config/workflow-bridge.php` 中调整，不需要继续扩充 `.env`。
+租约、重试、验签时间窗口、HTTP 超时和 token 缓存均提供 `env()` 覆盖入口和包内默认值。常规项目不需要把这些可选项写入 `.env` 或 `.env.example`；只有确需调优时再单独配置。
 
 ## Redis 与队列
 

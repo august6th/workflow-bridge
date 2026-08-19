@@ -72,7 +72,7 @@ WORKFLOW_CALLBACK_SECRET=<callback-secret>
 WORKFLOW_OWNER_SYSTEM=ic
 ```
 
-其余租约、重试、验签时间窗口、HTTP 超时和 token 缓存使用包内默认值。客户端身份根据 `WORKFLOW_OWNER_SYSTEM` 自动生成，`ic` 对应 `ic_workflow_bridge`；流程编码由调用方法直接传入。
+其余租约、重试、验签时间窗口、HTTP 超时和 token 缓存都支持 `env()` 覆盖，但常规项目直接使用包内默认值，不写入 `.env` 或 `.env.example`。客户端身份根据 `WORKFLOW_OWNER_SYSTEM` 自动生成，`ic` 对应 `ic_workflow_bridge`；流程编码由调用方法直接传入。
 
 执行 `php artisan config:clear`。回调路由需排除登录鉴权、内部 signature 中间件和 CSRF 校验，包内负责 Workflow HMAC 验签。
 

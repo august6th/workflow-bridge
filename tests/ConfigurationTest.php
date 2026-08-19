@@ -24,7 +24,7 @@ class ConfigurationTest extends TestCase
         );
     }
 
-    public function testOperationalSettingsUsePackageDefaultsWithoutExtraEnvironmentSections()
+    public function testOperationalSettingsUsePackageDefaultsWithoutExtraConfigSections()
     {
         $config = require __DIR__ . '/../config/workflow-bridge.php';
 
@@ -40,6 +40,18 @@ class ConfigurationTest extends TestCase
         $this->assertSame(3600, $config['token_cache_seconds']);
         $this->assertArrayNotHasKey('client', $config);
         $this->assertArrayNotHasKey('processes', $config);
+    }
+
+    public function testOperationalSettingsMayBeOverriddenByEnvironment()
+    {
+        putenv('WORKFLOW_HTTP_TIMEOUT=27');
+
+        try {
+            $config = require __DIR__ . '/../config/workflow-bridge.php';
+            $this->assertSame(27, $config['http_timeout']);
+        } finally {
+            putenv('WORKFLOW_HTTP_TIMEOUT');
+        }
     }
 
     public function testEmptyCallbackSecretRemainsFailClosed()
