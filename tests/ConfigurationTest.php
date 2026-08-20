@@ -26,6 +26,9 @@ class ConfigurationTest extends TestCase
 
     public function testOperationalSettingsUsePackageDefaultsWithoutExtraConfigSections()
     {
+        putenv('WORKFLOW_START_QUEUE');
+        putenv('WORKFLOW_HTTP_TIMEOUT');
+
         $config = require __DIR__ . '/../config/workflow-bridge.php';
 
         $this->assertSame(300, $config['sso_clock_skew_seconds']);
@@ -38,6 +41,7 @@ class ConfigurationTest extends TestCase
         $this->assertSame(3600, $config['apply_retry_max_seconds']);
         $this->assertSame(15, $config['http_timeout']);
         $this->assertSame(3600, $config['token_cache_seconds']);
+        $this->assertSame('workflow-bridge', $config['start_queue']);
         $this->assertArrayNotHasKey('client', $config);
         $this->assertArrayNotHasKey('processes', $config);
     }
@@ -51,6 +55,18 @@ class ConfigurationTest extends TestCase
             $this->assertSame(27, $config['http_timeout']);
         } finally {
             putenv('WORKFLOW_HTTP_TIMEOUT');
+        }
+    }
+
+    public function testStartQueueSuffixMayBeOverriddenByEnvironment()
+    {
+        putenv('WORKFLOW_START_QUEUE=workflow-start');
+
+        try {
+            $config = require __DIR__ . '/../config/workflow-bridge.php';
+            $this->assertSame('workflow-start', $config['start_queue']);
+        } finally {
+            putenv('WORKFLOW_START_QUEUE');
         }
     }
 

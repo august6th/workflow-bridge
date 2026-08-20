@@ -5,6 +5,7 @@ return [
     'sso_secret' => env('WORKFLOW_SSO_SECRET', ''),
     'callback_secret' => env('WORKFLOW_CALLBACK_SECRET', ''),
     'owner_system' => env('WORKFLOW_OWNER_SYSTEM', 'erp'),
+    'start_queue' => env('WORKFLOW_START_QUEUE', 'workflow-bridge'),
 
     'sso_clock_skew_seconds' => max(30, (int) env('WORKFLOW_SSO_CLOCK_SKEW_SECONDS', 300)),
     'callback_clock_skew_seconds' => max(30, (int) env('WORKFLOW_CALLBACK_CLOCK_SKEW_SECONDS', 300)),

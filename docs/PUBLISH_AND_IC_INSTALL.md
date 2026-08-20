@@ -16,14 +16,14 @@ git ls-files | rg '^(vendor/|composer\.lock$|\.env$)'
 
 ## 版本
 
-Composer 库版本由 Git tag 决定，不在 `composer.json` 写 `version`。当前可靠性版本准备发布为 `v1.2.0`；没有明确发布指令前不要创建 tag 或 push。
+Composer 库版本由 Git tag 决定，不在 `composer.json` 写 `version`。当前可靠性版本为 `v1.3.0`。
 
 发布时：
 
 ```bash
-git tag -a v1.2.0 -m "v1.2.0"
+git tag -a v1.3.0 -m "v1.3.0"
 git push origin main
-git push origin v1.2.0
+git push origin v1.3.0
 ```
 
 ## ERP 安装
@@ -39,7 +39,7 @@ git push origin v1.2.0
     }
   ],
   "require": {
-    "august6th/workflow-bridge": "^1.2"
+    "august6th/workflow-bridge": "^1.3"
   }
 }
 ```
@@ -72,11 +72,11 @@ WORKFLOW_CALLBACK_SECRET=<callback-secret>
 WORKFLOW_OWNER_SYSTEM=ic
 ```
 
-其余租约、重试、验签时间窗口、HTTP 超时和 token 缓存都支持 `env()` 覆盖，但常规项目直接使用包内默认值，不写入 `.env` 或 `.env.example`。客户端身份根据 `WORKFLOW_OWNER_SYSTEM` 自动生成，`ic` 对应 `ic_workflow_bridge`；流程编码由调用方法直接传入。
+发起 Job 实际队列名为 `{WORKFLOW_OWNER_SYSTEM}:{WORKFLOW_START_QUEUE}`，后缀默认 `workflow-bridge`（IC 即 `ic:workflow-bridge`）。其余租约、重试、验签时间窗口、HTTP 超时和 token 缓存都支持 `env()` 覆盖，但常规项目直接使用包内默认值，不写入 `.env` 或 `.env.example`。客户端身份根据 `WORKFLOW_OWNER_SYSTEM` 自动生成，`ic` 对应 `ic_workflow_bridge`；流程编码由调用方法直接传入。
 
 执行 `php artisan config:clear`。回调路由需排除登录鉴权、内部 signature 中间件和 CSRF 校验，包内负责 Workflow HMAC 验签。
 
-Bridge 不直接依赖 Redis。`dispatchProcess()` 使用 ERP 项目现有的 Laravel 队列连接；可以选择 `sync`、`database` 或 `redis`。使用 `sync` 或 `database` 时无需为 Bridge 增加 Redis。
+Bridge 不直接依赖 Redis。`dispatchProcess()` 使用 ERP 项目现有的 Laravel 队列连接；可以选择 `sync`、`database` 或 `redis`。使用 `sync` 或 `database` 时无需为 Bridge 增加 Redis。worker 需 `--queue=<owner_system>:<start_queue_suffix>`，例如 `ic:workflow-bridge`。
 
 ## 调度与验证
 

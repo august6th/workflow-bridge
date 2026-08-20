@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0 - 2026-08-20
+
+### Changed
+
+- 发起 Job 队列名由 `{WORKFLOW_OWNER_SYSTEM}:{WORKFLOW_START_QUEUE}` 自动拼接；`WORKFLOW_START_QUEUE` 仅表示后缀，默认 `workflow-bridge`（例如 IC 得到 `ic:workflow-bridge`），避免多模块共用 Redis 时互相消费
+
 ## 1.2.0 - 2026-08-19
 
 ### Fixed

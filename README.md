@@ -22,7 +22,7 @@ owner_system + process_code + business_key
 ## 安装
 
 ```bash
-composer require august6th/workflow-bridge:^1.2
+composer require august6th/workflow-bridge:^1.3
 ```
 
 Laravel 5.5 未自动发现时，在 `config/app.php` 注册：
@@ -61,7 +61,7 @@ WORKFLOW_CALLBACK_SECRET=
 WORKFLOW_OWNER_SYSTEM=ic
 ```
 
-`WORKFLOW_SSO_SECRET` 和 `WORKFLOW_CALLBACK_SECRET` 不能为空。回调 secret 为空时验签会直接失败。
+`WORKFLOW_SSO_SECRET`、`WORKFLOW_CALLBACK_SECRET` 不能为空。回调 secret 为空时验签会直接失败。发起 Job 实际队列名为 `{WORKFLOW_OWNER_SYSTEM}:{WORKFLOW_START_QUEUE}`，后缀默认 `workflow-bridge`（IC 即 `ic:workflow-bridge`）；一般无需单独配置 `WORKFLOW_START_QUEUE`。
 
 客户端身份由 `WORKFLOW_OWNER_SYSTEM` 自动生成。例如 `ic` 对应 `external_user_id` 和 `user_name` 均为 `ic_workflow_bridge`，展示名为 `IC Workflow Bridge`。流程编码由 `dispatchProcess()` 等方法直接传入，不需要环境变量。
 
@@ -74,6 +74,12 @@ WORKFLOW_OWNER_SYSTEM=ic
 - `sync`：同步执行，不需要 Redis
 - `database`：使用数据库队列，不需要 Redis
 - `redis`：由宿主项目提供 Redis 和队列 worker
+
+发起 Job 实际队列名为 `{WORKFLOW_OWNER_SYSTEM}:{WORKFLOW_START_QUEUE}`（后缀默认 `workflow-bridge`）。worker 需监听对应队列：
+
+```bash
+php artisan queue:work redis --queue=ic:workflow-bridge
+```
 
 Workflow 服务端可继续使用 Redis 处理回调队列和共享缓存，这不要求每个 ERP 项目为 Bridge 单独部署 Redis。
 

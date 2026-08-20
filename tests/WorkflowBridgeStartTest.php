@@ -235,9 +235,10 @@ class WorkflowBridgeStartTest extends TestCase
 
     public function testStartJobCarriesOnlyPersistedResultId()
     {
-        $job = new StartWorkflowProcessJob(123);
+        $job = new StartWorkflowProcessJob(123, 'ic:workflow-bridge');
 
         $this->assertSame(123, $job->approvalResultId);
+        $this->assertSame('ic:workflow-bridge', $job->queue);
     }
 
     public function testProcessDueStartsOnlyEligibleRows()
@@ -280,7 +281,9 @@ class WorkflowBridgeStartTest extends TestCase
             ->with($this->callback(function (StartWorkflowProcessJob $job) {
                 $result = WorkflowApprovalResult::find($job->approvalResultId);
 
-                return $result && $result->start_status === WorkflowApprovalResult::START_PENDING;
+                return $result
+                    && $result->start_status === WorkflowApprovalResult::START_PENDING
+                    && $job->queue === 'ic:workflow-bridge';
             }));
         $bridge = new WorkflowBridge(
             $client,
@@ -292,6 +295,26 @@ class WorkflowBridgeStartTest extends TestCase
         $result = $bridge->dispatchProcess('skc_approval', 'A009');
 
         $this->assertSame(WorkflowApprovalResult::START_PENDING, $result->start_status);
+    }
+
+    public function testDispatchProcessUsesConfiguredStartQueue()
+    {
+        $client = $this->createMock(WorkflowClient::class);
+        $processor = new StartWorkflowProcessor($client, ['owner_system' => 'ic']);
+        $dispatcher = $this->createMock(Dispatcher::class);
+        $dispatcher->expects($this->once())
+            ->method('dispatch')
+            ->with($this->callback(function (StartWorkflowProcessJob $job) {
+                return $job->queue === 'ic:workflow-start';
+            }));
+        $bridge = new WorkflowBridge(
+            $client,
+            ['owner_system' => 'ic', 'start_queue' => 'workflow-start'],
+            $processor,
+            $dispatcher
+        );
+
+        $bridge->dispatchProcess('skc_approval', 'A010');
     }
 
     public function testProcessDueRecoversExpiredProcessingLease()

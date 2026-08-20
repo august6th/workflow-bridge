@@ -6,6 +6,7 @@ use August6th\WorkflowBridge\Client\WorkflowClient;
 use August6th\WorkflowBridge\Jobs\StartWorkflowProcessJob;
 use August6th\WorkflowBridge\Models\WorkflowApprovalResult;
 use August6th\WorkflowBridge\Start\StartWorkflowProcessor;
+use August6th\WorkflowBridge\Support\StartQueueName;
 use Illuminate\Contracts\Bus\Dispatcher;
 use Illuminate\Database\QueryException;
 use InvalidArgumentException;
@@ -117,11 +118,12 @@ class WorkflowBridge
      */
     public function dispatchProcess($processCode, $businessKey, array $options = [])
     {
+        $queue = $this->startQueueName();
         $result = $this->requestProcess($processCode, $businessKey, $options);
         if ($result->start_status === WorkflowApprovalResult::START_PENDING
             || $result->start_status === WorkflowApprovalResult::START_FAILED) {
             $dispatcher = $this->dispatcher ?: app(Dispatcher::class);
-            $dispatcher->dispatch(new StartWorkflowProcessJob($result->id));
+            $dispatcher->dispatch(new StartWorkflowProcessJob($result->id, $queue));
         }
 
         return $result;
@@ -224,6 +226,14 @@ class WorkflowBridge
         return collect($normalizedBusinessKeys)->mapWithKeys(function ($businessKey) use ($results) {
             return [$businessKey => $results->get($businessKey)];
         });
+    }
+
+    /**
+     * @return string
+     */
+    protected function startQueueName()
+    {
+        return StartQueueName::resolve($this->config);
     }
 
 }

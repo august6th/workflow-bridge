@@ -98,9 +98,10 @@ class CallbackVerifierTest extends TestCase
 
     public function testStartJobCarriesPersistedResultId()
     {
-        $job = new StartWorkflowProcessJob(42);
+        $job = new StartWorkflowProcessJob(42, 'ic:workflow-bridge');
 
         $this->assertSame(42, $job->approvalResultId);
         $this->assertSame(1, $job->tries);
+        $this->assertSame('ic:workflow-bridge', $job->queue);
     }
 }
