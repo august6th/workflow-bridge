@@ -60,9 +60,9 @@ local_apply_status=applied/skipped -> 本地处理完成
 
 ## 调度
 
-```php
-$schedule->command('workflow:retry-start --process=skc_approval --owner=ic')->everyMinute();
-$schedule->command('workflow:apply-results --process=skc_approval --owner=ic')->everyMinute();
+```cron
+* * * * * cd /absolute/path/to/ic && /usr/bin/flock -n /tmp/ic-workflow-retry-start.lock /usr/bin/php artisan workflow:retry-start --owner=ic --process=skc_approval >> /absolute/path/to/ic/storage/logs/workflow-retry-start.log 2>&1
+* * * * * cd /absolute/path/to/ic && /usr/bin/flock -n /tmp/ic-workflow-apply-results.lock /usr/bin/php artisan workflow:apply-results --owner=ic --process=skc_approval >> /absolute/path/to/ic/storage/logs/workflow-apply-results.log 2>&1
 ```
 
 回调路由必须排除 IC 登录鉴权、内部 signature 中间件和 CSRF 校验。

@@ -3,6 +3,7 @@
 namespace August6th\WorkflowBridge;
 
 use August6th\WorkflowBridge\Application\ResultApplicationService;
+use August6th\WorkflowBridge\Application\ResultApplierRegistry;
 use August6th\WorkflowBridge\Bridge\WorkflowBridge;
 use August6th\WorkflowBridge\Callback\CallbackHandler;
 use August6th\WorkflowBridge\Callback\CallbackPayloadValidator;
@@ -10,7 +11,6 @@ use August6th\WorkflowBridge\Callback\CallbackVerifier;
 use August6th\WorkflowBridge\Client\WorkflowClient;
 use August6th\WorkflowBridge\Console\ApplyResultsCommand;
 use August6th\WorkflowBridge\Console\RetryFailedStartsCommand;
-use August6th\WorkflowBridge\Contracts\ResultApplier;
 use August6th\WorkflowBridge\Start\StartWorkflowProcessor;
 use Illuminate\Support\ServiceProvider;
 
@@ -80,9 +80,13 @@ class WorkflowBridgeServiceProvider extends ServiceProvider
             );
         });
 
+        $this->app->singleton(ResultApplierRegistry::class, function ($app) {
+            return new ResultApplierRegistry($app);
+        });
+
         $this->app->singleton(ResultApplicationService::class, function ($app) {
             return new ResultApplicationService(
-                $app->make(ResultApplier::class),
+                $app->make(ResultApplierRegistry::class),
                 $app['config']->get('workflow-bridge', [])
             );
         });

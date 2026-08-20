@@ -22,7 +22,7 @@ owner_system + process_code + business_key
 ## 安装
 
 ```bash
-composer require august6th/workflow-bridge:^1.3
+composer require august6th/workflow-bridge:^1.4
 ```
 
 Laravel 5.5 未自动发现时，在 `config/app.php` 注册：
@@ -121,7 +121,21 @@ Route::post(
 
 ## 应用业务结果
 
-宿主项目绑定 `August6th\WorkflowBridge\Contracts\ResultApplier`。实现必须按结果 ID 或业务唯一键保证幂等，因为 worker 在执行成功但落状态前退出时会重试。
+每种业务结果按 `owner_system + process_code` 精确注册独立的 `ResultApplier`。未注册路由不会被查询、抢占或修改状态；重复注册会抛出 `InvalidArgumentException`，避免后注册者静默覆盖已有规则。
+
+```php
+use App\Workflow\SkcApprovalResultApplier;
+use App\Workflow\ListingPublishResultApplier;
+use August6th\WorkflowBridge\Application\ResultApplierRegistry;
+
+public function boot(ResultApplierRegistry $registry)
+{
+    $registry->register('ic', 'skc_approval', SkcApprovalResultApplier::class);
+    $registry->register('listing', 'publish_approval', ListingPublishResultApplier::class);
+}
+```
+
+也可将已构造且实现 `August6th\WorkflowBridge\Contracts\ResultApplier` 的对象作为第三个参数。类字符串会在实际应用结果时通过 Laravel 容器解析。
 
 `apply()` 返回：
 
@@ -129,19 +143,28 @@ Route::post(
 - `false`：业务明确跳过，记录进入 `skipped`
 - 抛出异常或 `Error`：记录进入 `failed` 并按退避时间重试
 
+实现必须按结果 ID 或 `owner_system + process_code + business_key` 保证幂等，因为 worker 在执行成功但落状态前退出时会重试。
+
+不带路由过滤时，命令只扫描 registry 中已注册的路由。显式过滤必须同时提供 `--owner` 和 `--process`，并且该精确路由必须已注册：
+
+```bash
+php artisan workflow:apply-results --dry-run --limit=100
+php artisan workflow:apply-results --owner=ic --process=skc_approval --include-failed=1
+```
+
 ## 定时任务
 
-```php
-$schedule->command('workflow:retry-start --owner=ic')->everyMinute();
-$schedule->command('workflow:apply-results --owner=ic')->everyMinute();
+```cron
+* * * * * cd /absolute/path/to/erp && /usr/bin/flock -n /tmp/workflow-retry-start.lock /usr/bin/php artisan workflow:retry-start --owner=ic --process=skc_approval >> /absolute/path/to/erp/storage/logs/workflow-retry-start.log 2>&1
+* * * * * cd /absolute/path/to/erp && /usr/bin/flock -n /tmp/workflow-apply-results.lock /usr/bin/php artisan workflow:apply-results --owner=ic --process=skc_approval >> /absolute/path/to/erp/storage/logs/workflow-apply-results.log 2>&1
 ```
 
 手工检查：
 
 ```bash
 php artisan workflow:retry-start --process=skc_approval --owner=ic
-php artisan workflow:apply-results --owner=ic --dry-run
-php artisan workflow:apply-results --owner=ic --include-failed=1
+php artisan workflow:apply-results --owner=ic --process=skc_approval --dry-run
+php artisan workflow:apply-results --owner=ic --process=skc_approval --include-failed=1
 ```
 
 ## 查询

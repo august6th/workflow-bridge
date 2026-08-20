@@ -50,6 +50,7 @@ class CreateWorkflowApprovalResultsTable extends Migration
                 $table->index(['local_apply_status', 'created_at'], 'idx_war_apply_created');
                 $table->index(['start_next_retry_at', 'start_status'], 'idx_war_start_due');
                 $table->index(['apply_next_retry_at', 'local_apply_status'], 'idx_war_apply_due');
+                $table->index(['process_code', 'owner_system', 'apply_next_retry_at', 'local_apply_status'], 'idx_war_route_apply_due');
             });
         }
 

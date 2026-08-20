@@ -67,7 +67,10 @@ class DatabaseSchemaTest extends TestCase
         $sql = file_get_contents(__DIR__ . '/../database/sql/workflow_approval_results.sql');
 
         $this->assertCount(1, $migrationFiles);
-        $this->assertCount(0, $upgradeSqlFiles);
+        $this->assertCount(1, $upgradeSqlFiles);
+        $upgradeSql = file_get_contents($upgradeSqlFiles[0]);
+        $this->assertNotSame(false, strpos($upgradeSql, 'idx_war_route_apply_due'));
+        $this->assertSame(false, strpos($upgradeSql, 'ALTER TABLE `workflow_approval_results` ADD INDEX IF NOT EXISTS'));
         $this->assertSame(false, strpos($sql, '1970-01-01'));
         $this->assertSame(false, strpos($sql, '9999-12-31'));
         $this->assertNotSame(false, strpos($sql, '`finished_at` datetime NULL DEFAULT NULL'));

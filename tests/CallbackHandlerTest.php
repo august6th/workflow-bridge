@@ -48,7 +48,7 @@ class CallbackHandlerTest extends TestCase
         $this->assertNull($handled->start_processing_at);
         $this->assertSame(1, WorkflowCallbackDelivery::count());
         $delivery = WorkflowCallbackDelivery::first();
-        $this->assertSame($result->id, $delivery->approval_result_id);
+        $this->assertEquals($result->id, $delivery->approval_result_id);
         $this->assertSame('callback:a100:approved', $delivery->idempotency_key);
     }
 

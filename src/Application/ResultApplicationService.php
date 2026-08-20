@@ -2,21 +2,21 @@
 
 namespace August6th\WorkflowBridge\Application;
 
-use August6th\WorkflowBridge\Contracts\ResultApplier;
 use August6th\WorkflowBridge\Models\WorkflowApprovalResult;
+use InvalidArgumentException;
 use Throwable;
 
 class ResultApplicationService
 {
-    /** @var ResultApplier */
-    protected $applier;
+    /** @var ResultApplierRegistry */
+    protected $registry;
 
     /** @var array */
     protected $config;
 
-    public function __construct(ResultApplier $applier, array $config = [])
+    public function __construct(ResultApplierRegistry $registry, array $config = [])
     {
-        $this->applier = $applier;
+        $this->registry = $registry;
         $this->config = $config;
     }
 
@@ -26,8 +26,23 @@ class ResultApplicationService
      */
     public function process($approvalResultId)
     {
+        list($result) = $this->processWithClaim($approvalResultId);
+
+        return $result;
+    }
+
+    protected function processWithClaim($approvalResultId)
+    {
+        $result = WorkflowApprovalResult::where('id', $approvalResultId)->firstOrFail();
+        if (!$this->registry->has($result->owner_system, $result->process_code)) {
+            return [$result, false];
+        }
+
+        $applier = $this->registry->resolve($result->owner_system, $result->process_code);
         $now = date('Y-m-d H:i:s');
         $claimed = WorkflowApprovalResult::where('id', $approvalResultId)
+            ->where('process_code', $result->process_code)
+            ->where('owner_system', $result->owner_system)
             ->whereIn('workflow_status', [
                 WorkflowApprovalResult::STATUS_APPROVED,
                 WorkflowApprovalResult::STATUS_REJECTED,
@@ -45,13 +60,13 @@ class ResultApplicationService
 
         $result = WorkflowApprovalResult::where('id', $approvalResultId)->firstOrFail();
         if ($claimed !== 1) {
-            return $result;
+            return [$result, false];
         }
 
         try {
-            return $this->markCompleted($result, $this->applier->apply($result));
+            return [$this->markCompleted($result, $applier->apply($result)), true];
         } catch (Throwable $exception) {
-            return $this->markFailed($result, $exception);
+            return [$this->markFailed($result, $exception), true];
         }
     }
 
@@ -61,39 +76,22 @@ class ResultApplicationService
      */
     public function processDue(array $options = [])
     {
-        $ownerSystem = isset($options['owner_system']) ? $options['owner_system'] : '';
-        $processCode = isset($options['process_code']) ? $options['process_code'] : '';
-        $includeFailed = !isset($options['include_failed']) || (bool) $options['include_failed'];
+        $scope = $this->routeScope($options);
         $limit = isset($options['limit']) ? min(1000, max(1, (int) $options['limit'])) : 100;
 
-        $this->recoverExpiredLeases($ownerSystem, $processCode);
+        $this->recoverExpiredLeases($scope);
 
-        $statuses = [WorkflowApprovalResult::APPLY_PENDING];
-        if ($includeFailed) {
-            $statuses[] = WorkflowApprovalResult::APPLY_FAILED;
-        }
-
-        $now = date('Y-m-d H:i:s');
-        $query = WorkflowApprovalResult::query()
-            ->whereIn('workflow_status', [
-                WorkflowApprovalResult::STATUS_APPROVED,
-                WorkflowApprovalResult::STATUS_REJECTED,
-            ])
-            ->where('apply_next_retry_at', '<=', $now)
-            ->whereIn('local_apply_status', $statuses)
+        $ids = $this->dueQuery($scope, $options)
             ->orderBy('id', 'asc')
-            ->limit($limit);
-        if ($ownerSystem !== '') {
-            $query->where('owner_system', $ownerSystem);
-        }
-        if ($processCode !== '') {
-            $query->where('process_code', $processCode);
-        }
-
-        $ids = $query->pluck('id')->all();
+            ->limit($limit)
+            ->pluck('id')
+            ->all();
         $stats = ['processed' => 0, 'applied' => 0, 'skipped' => 0, 'failed' => 0];
         foreach ($ids as $id) {
-            $result = $this->process($id);
+            list($result, $claimedByThisWorker) = $this->processWithClaim($id);
+            if (!$claimedByThisWorker) {
+                continue;
+            }
             $stats['processed']++;
             if ($result->local_apply_status === WorkflowApprovalResult::APPLY_APPLIED) {
                 $stats['applied']++;
@@ -108,29 +106,109 @@ class ResultApplicationService
     }
 
     /**
-     * @param string $ownerSystem
-     * @param string $processCode
-     * @return int
+     * @param array $options
+     * @return \Illuminate\Database\Eloquent\Collection
      */
-    protected function recoverExpiredLeases($ownerSystem, $processCode)
+    public function dueResults(array $options = [])
     {
+        $scope = $this->routeScope($options);
+        $limit = isset($options['limit']) ? min(1000, max(1, (int) $options['limit'])) : 100;
+
+        return $this->dueQuery($scope, $options)
+            ->orderBy('id', 'asc')
+            ->limit($limit)
+            ->get(['id', 'business_key', 'owner_system', 'process_code', 'workflow_status', 'local_apply_status']);
+    }
+
+    protected function routeScope(array $options)
+    {
+        $ownerSystem = isset($options['owner_system']) ? $options['owner_system'] : '';
+        $processCode = isset($options['process_code']) ? $options['process_code'] : '';
+        if (!is_string($ownerSystem) || !is_string($processCode)) {
+            throw new InvalidArgumentException('owner_system and process_code filters must be strings.');
+        }
+        $ownerSystem = trim($ownerSystem);
+        $processCode = trim($processCode);
+        if (($ownerSystem === '') !== ($processCode === '')) {
+            throw new InvalidArgumentException('owner_system and process_code must be provided together.');
+        }
+        if ($ownerSystem !== '') {
+            if (!$this->registry->has($ownerSystem, $processCode)) {
+                throw new InvalidArgumentException(sprintf(
+                    'No result applier registered for owner_system=%s process_code=%s',
+                    $ownerSystem,
+                    $processCode
+                ));
+            }
+
+            return [['owner_system' => $ownerSystem, 'process_code' => $processCode]];
+        }
+
+        return $this->registry->routes();
+    }
+
+    protected function dueQuery(array $scope, array $options)
+    {
+        $includeFailed = !isset($options['include_failed']) || (bool) $options['include_failed'];
+        $statuses = [WorkflowApprovalResult::APPLY_PENDING];
+        if ($includeFailed) {
+            $statuses[] = WorkflowApprovalResult::APPLY_FAILED;
+        }
+
+        $query = WorkflowApprovalResult::query();
+        if (isset($options['business_keys'])) {
+            if (!is_array($options['business_keys'])) {
+                throw new InvalidArgumentException('business_keys filter must be an array.');
+            }
+            if ($options['business_keys'] === []) {
+                return $query->whereRaw('1 = 0');
+            }
+            $query->whereIn('business_key', $options['business_keys']);
+        }
+        $query = $this->applyRouteScope($query, $scope);
+
+        return $query
+            ->where('apply_next_retry_at', '<=', date('Y-m-d H:i:s'))
+            ->whereIn('local_apply_status', $statuses)
+            ->whereIn('workflow_status', [
+                WorkflowApprovalResult::STATUS_APPROVED,
+                WorkflowApprovalResult::STATUS_REJECTED,
+            ]);
+    }
+
+    protected function applyRouteScope($query, array $scope)
+    {
+        if (empty($scope)) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where(function ($routeQuery) use ($scope) {
+            foreach ($scope as $route) {
+                $routeQuery->orWhere(function ($query) use ($route) {
+                    $query->where('process_code', $route['process_code'])
+                        ->where('owner_system', $route['owner_system']);
+                });
+            }
+        });
+    }
+
+    protected function recoverExpiredLeases(array $scope)
+    {
+        if (empty($scope)) {
+            return 0;
+        }
+
         $leaseSeconds = isset($this->config['apply_lease_seconds'])
             ? max(30, (int) $this->config['apply_lease_seconds'])
             : 300;
         $now = date('Y-m-d H:i:s');
-        $query = WorkflowApprovalResult::query()
+        $query = $this->applyRouteScope(WorkflowApprovalResult::query(), $scope)
+            ->where('local_apply_status', WorkflowApprovalResult::APPLY_PROCESSING)
+            ->where('apply_processing_at', '<=', date('Y-m-d H:i:s', time() - $leaseSeconds))
             ->whereIn('workflow_status', [
                 WorkflowApprovalResult::STATUS_APPROVED,
                 WorkflowApprovalResult::STATUS_REJECTED,
-            ])
-            ->where('local_apply_status', WorkflowApprovalResult::APPLY_PROCESSING)
-            ->where('apply_processing_at', '<=', date('Y-m-d H:i:s', time() - $leaseSeconds));
-        if ($ownerSystem !== '') {
-            $query->where('owner_system', $ownerSystem);
-        }
-        if ($processCode !== '') {
-            $query->where('process_code', $processCode);
-        }
+            ]);
 
         return $query->update([
             'local_apply_status' => WorkflowApprovalResult::APPLY_FAILED,
@@ -140,11 +218,6 @@ class ResultApplicationService
         ]);
     }
 
-    /**
-     * @param WorkflowApprovalResult $result
-     * @param bool $applied
-     * @return WorkflowApprovalResult
-     */
     protected function markCompleted(WorkflowApprovalResult $result, $applied)
     {
         $now = date('Y-m-d H:i:s');
@@ -161,11 +234,6 @@ class ResultApplicationService
         return $result->fresh();
     }
 
-    /**
-     * @param WorkflowApprovalResult $result
-     * @param Throwable $exception
-     * @return WorkflowApprovalResult
-     */
     protected function markFailed(WorkflowApprovalResult $result, Throwable $exception)
     {
         $now = time();
@@ -190,11 +258,6 @@ class ResultApplicationService
         return $result->fresh();
     }
 
-    /**
-     * @param string $text
-     * @param int $max
-     * @return string
-     */
     protected function truncate($text, $max)
     {
         if (function_exists('mb_substr')) {

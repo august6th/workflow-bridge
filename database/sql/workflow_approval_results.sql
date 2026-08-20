@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS `workflow_approval_results` (
   KEY `idx_war_status_updated` (`workflow_status`,`updated_at`),
   KEY `idx_war_apply_created` (`local_apply_status`,`created_at`),
   KEY `idx_war_start_due` (`start_next_retry_at`,`start_status`),
-  KEY `idx_war_apply_due` (`apply_next_retry_at`,`local_apply_status`)
+  KEY `idx_war_apply_due` (`apply_next_retry_at`,`local_apply_status`),
+  KEY `idx_war_route_apply_due` (`process_code`,`owner_system`,`apply_next_retry_at`,`local_apply_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Workflow 审核桥接结果表';
 
 CREATE TABLE IF NOT EXISTS `workflow_callback_deliveries` (

@@ -16,14 +16,14 @@ git ls-files | rg '^(vendor/|composer\.lock$|\.env$)'
 
 ## 版本
 
-Composer 库版本由 Git tag 决定，不在 `composer.json` 写 `version`。当前可靠性版本为 `v1.3.0`。
+Composer 库版本由 Git tag 决定，不在 `composer.json` 写 `version`。registry 精确路由 API 从 `v1.4.0` 起提供。
 
 发布时：
 
 ```bash
-git tag -a v1.3.0 -m "v1.3.0"
+git tag -a v1.4.0 -m "v1.4.0"
 git push origin main
-git push origin v1.3.0
+git push origin v1.4.0
 ```
 
 ## ERP 安装
@@ -39,7 +39,7 @@ git push origin v1.3.0
     }
   ],
   "require": {
-    "august6th/workflow-bridge": "^1.3"
+    "august6th/workflow-bridge": "^1.4"
   }
 }
 ```
@@ -53,13 +53,21 @@ Laravel 5.5 未自动发现时，在 `config/app.php` 注册 `WorkflowBridgeServ
 
 ## 数据库
 
-项目尚未上线，只有一份最终 DDL：
+全新安装执行最终 DDL：
 
 ```bash
 mysql -h<host> -u<user> -p<db> < vendor/august6th/workflow-bridge/database/sql/workflow_approval_results.sql
 ```
 
-不要再执行历史增量脚本。该 DDL 同时创建结果投影表和回调投递表；尚未发生的流程、重试、抢占和应用时间为 `NULL`。
+该 DDL 同时创建结果投影表和回调投递表；尚未发生的流程、重试、抢占和应用时间为 `NULL`。
+
+已有 1.3 表升级到 1.4 时，`CREATE TABLE IF NOT EXISTS` 不会新增索引。先执行：
+
+```sql
+SHOW INDEX FROM `workflow_approval_results` WHERE Key_name = 'idx_war_route_apply_due';
+```
+
+无结果时执行 `vendor/august6th/workflow-bridge/database/sql/upgrades/1.3.0-to-1.4.0.sql`，完成后再次 `SHOW INDEX` 验证。该脚本可重复执行，不使用兼容性不统一的 `ADD INDEX IF NOT EXISTS`。
 
 ## 配置与路由
 
@@ -80,9 +88,9 @@ Bridge 不直接依赖 Redis。`dispatchProcess()` 使用 ERP 项目现有的 La
 
 ## 调度与验证
 
-```php
-$schedule->command('workflow:retry-start --owner=ic')->everyMinute();
-$schedule->command('workflow:apply-results --owner=ic')->everyMinute();
+```cron
+* * * * * cd /absolute/path/to/ic && /usr/bin/flock -n /tmp/ic-workflow-retry-start.lock /usr/bin/php artisan workflow:retry-start --owner=ic --process=REPLACE_WITH_SKC_PROCESS_CODE >> /absolute/path/to/ic/storage/logs/workflow-retry-start.log 2>&1
+* * * * * cd /absolute/path/to/ic && /usr/bin/flock -n /tmp/ic-workflow-apply-results.lock /usr/bin/php artisan workflow:apply-results --owner=ic --process=REPLACE_WITH_SKC_PROCESS_CODE >> /absolute/path/to/ic/storage/logs/workflow-apply-results.log 2>&1
 ```
 
 验证顺序：

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.4.0 - 2026-08-20
+
+### Added
+
+- 新增 `ResultApplierRegistry`，按 `owner_system + process_code` 精确注册和解析本地结果应用器
+- 通用应用命令仅扫描已注册路由，并要求 `--owner` 与 `--process` 成对传入；定向业务键候选同样遵循终态、应用状态和重试到期范围
+- 新增路由到期索引 `idx_war_route_apply_due (process_code, owner_system, apply_next_retry_at, local_apply_status)` 及 1.3.0 到 1.4.0 最小增量 SQL
+
+### Fixed
+
+- 未注册任何路由时不再扫描或处理结果
+- 候选 ID 被其他 worker 抢占时不再错误计入 `processDue()` 的 processed 统计
+
 ## 1.3.0 - 2026-08-20
 
 ### Changed
