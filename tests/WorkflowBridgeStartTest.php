@@ -271,6 +271,51 @@ class WorkflowBridgeStartTest extends TestCase
         $this->assertSame(WorkflowApprovalResult::START_FAILED, $future->fresh()->start_status);
     }
 
+    public function testProcessDueDoesNotCountAStartClaimedByAnotherWorker()
+    {
+        $client = $this->createMock(WorkflowClient::class);
+        $client->expects($this->never())->method('startProcess');
+        $bridge = new WorkflowBridge($client, ['owner_system' => 'ic']);
+        $request = $bridge->requestProcess('skc_approval', 'START-CLAIMED');
+        $processor = new CompetingStartWorkflowProcessor($client, ['owner_system' => 'ic']);
+
+        $stats = $processor->processDue([
+            'owner_system' => 'ic',
+            'process_code' => 'skc_approval',
+            'limit' => 10,
+        ]);
+
+        $this->assertSame(['processed' => 0, 'succeeded' => 0, 'failed' => 0], $stats);
+        $this->assertSame(WorkflowApprovalResult::START_PROCESSING, $request->fresh()->start_status);
+    }
+
+    public function testProcessDueRecoversAtMostLimitExpiredStartLeases()
+    {
+        $client = $this->createMock(WorkflowClient::class);
+        $client->expects($this->once())->method('startProcess')->willReturn([
+            'data' => ['instance' => ['instance_uuid' => 'pi_start_limit', 'status' => 'waiting']],
+        ]);
+        $bridge = new WorkflowBridge($client, ['owner_system' => 'ic']);
+        $first = $bridge->requestProcess('skc_approval', 'START-LEASE-LIMIT-1');
+        $second = $bridge->requestProcess('skc_approval', 'START-LEASE-LIMIT-2');
+        foreach ([$first, $second] as $result) {
+            $result->start_status = WorkflowApprovalResult::START_PROCESSING;
+            $result->start_processing_at = '2026-08-18 00:00:00';
+            $result->save();
+        }
+        $processor = new StartWorkflowProcessor($client, ['owner_system' => 'ic', 'start_lease_seconds' => 300]);
+
+        $stats = $processor->processDue([
+            'owner_system' => 'ic',
+            'process_code' => 'skc_approval',
+            'limit' => 1,
+        ]);
+
+        $this->assertSame(1, $stats['processed']);
+        $this->assertSame(WorkflowApprovalResult::START_SUCCEEDED, $first->fresh()->start_status);
+        $this->assertSame(WorkflowApprovalResult::START_PROCESSING, $second->fresh()->start_status);
+    }
+
     public function testDispatchProcessPersistsBeforeDispatchingResultId()
     {
         $client = $this->createMock(WorkflowClient::class);
@@ -340,10 +385,33 @@ class WorkflowBridgeStartTest extends TestCase
             'start_lease_seconds' => 300,
         ]);
 
-        $stats = $processor->processDue(['owner_system' => 'ic']);
+        $stats = $processor->processDue([
+            'owner_system' => 'ic',
+            'process_code' => 'skc_approval',
+        ]);
 
         $this->assertSame(1, $stats['processed']);
         $this->assertSame(WorkflowApprovalResult::START_SUCCEEDED, $stale->fresh()->start_status);
+    }
+
+    public function testProcessDueRequiresProcessCode()
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('owner_system and process_code are required.');
+
+        $client = $this->createMock(WorkflowClient::class);
+        $processor = new StartWorkflowProcessor($client, ['owner_system' => 'ic']);
+        $processor->processDue(['owner_system' => 'ic']);
+    }
+
+    public function testProcessDueRequiresOwnerSystem()
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('owner_system and process_code are required.');
+
+        $client = $this->createMock(WorkflowClient::class);
+        $processor = new StartWorkflowProcessor($client, ['owner_system' => '']);
+        $processor->processDue(['process_code' => 'skc_approval']);
     }
 
     public function testMapResultsRequiresProcessCode()
@@ -380,5 +448,18 @@ class WorkflowBridgeStartTest extends TestCase
         $this->assertSame($first->id, $mapped->get('A010')->id);
         $this->assertSame($second->id, $mapped->get('A011')->id);
         $this->assertNull($mapped->get('MISSING'));
+    }
+}
+
+class CompetingStartWorkflowProcessor extends StartWorkflowProcessor
+{
+    protected function processWithClaim($approvalResultId)
+    {
+        WorkflowApprovalResult::where('id', $approvalResultId)->update([
+            'start_status' => WorkflowApprovalResult::START_PROCESSING,
+            'start_processing_at' => date('Y-m-d H:i:s'),
+        ]);
+
+        return parent::processWithClaim($approvalResultId);
     }
 }

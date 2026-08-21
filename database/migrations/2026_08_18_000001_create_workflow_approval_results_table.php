@@ -45,12 +45,10 @@ class CreateWorkflowApprovalResultsTable extends Migration
 
                 $table->unique('idempotency_key', 'uk_war_idem');
                 $table->unique(['business_key', 'process_code', 'owner_system'], 'uk_war_biz');
-                $table->index('instance_uuid', 'idx_war_instance');
-                $table->index(['workflow_status', 'updated_at'], 'idx_war_status_updated');
-                $table->index(['local_apply_status', 'created_at'], 'idx_war_apply_created');
-                $table->index(['start_next_retry_at', 'start_status'], 'idx_war_start_due');
-                $table->index(['apply_next_retry_at', 'local_apply_status'], 'idx_war_apply_due');
-                $table->index(['process_code', 'owner_system', 'apply_next_retry_at', 'local_apply_status'], 'idx_war_route_apply_due');
+                $table->index(['process_code', 'owner_system', 'local_apply_status', 'workflow_status', 'apply_next_retry_at'], 'idx_war_route_apply_due');
+                $table->index(['process_code', 'owner_system', 'local_apply_status', 'apply_processing_at'], 'idx_war_route_apply_lease');
+                $table->index(['process_code', 'owner_system', 'start_status', 'start_next_retry_at'], 'idx_war_route_start_due');
+                $table->index(['process_code', 'owner_system', 'start_status', 'start_processing_at'], 'idx_war_route_start_lease');
             });
         }
 
@@ -75,7 +73,7 @@ class CreateWorkflowApprovalResultsTable extends Migration
                 $table->unique('idempotency_key', 'uk_wcd_idempotency');
                 $table->index('approval_result_id', 'idx_wcd_result');
                 $table->index('instance_uuid', 'idx_wcd_instance');
-                $table->index(['business_key', 'process_code', 'owner_system'], 'idx_wcd_biz');
+                $table->index('received_at', 'idx_wcd_received');
             });
         }
     }

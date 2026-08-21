@@ -8,8 +8,8 @@ use Illuminate\Console\Command;
 class RetryFailedStartsCommand extends Command
 {
     protected $signature = 'workflow:retry-start
-        {--process= : process_code filter}
-        {--owner= : owner_system filter}
+        {--process= : required process_code route}
+        {--owner= : required owner_system route}
         {--business-key=* : business_key list}
         {--limit=100 : max rows}';
 
@@ -17,9 +17,18 @@ class RetryFailedStartsCommand extends Command
 
     public function handle(WorkflowBridge $bridge)
     {
+        $ownerSystem = $this->option('owner');
+        $processCode = $this->option('process');
+        if (!is_string($ownerSystem) || !is_string($processCode)
+            || trim($ownerSystem) === '' || trim($processCode) === '') {
+            $this->error('--owner and --process must be provided together and must not be empty.');
+
+            return 1;
+        }
+
         $stats = $bridge->retryFailedStarts([
-            'process_code' => (string) $this->option('process'),
-            'owner_system' => (string) $this->option('owner'),
+            'process_code' => trim($processCode),
+            'owner_system' => trim($ownerSystem),
             'business_keys' => (array) $this->option('business-key'),
             'limit' => (int) $this->option('limit'),
         ]);

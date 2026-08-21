@@ -10,6 +10,22 @@ ic + skc_approval + approval_no
 
 重复触发不会创建第二个流程实例。Workflow 结果先写入桥接表，再由 IC 的 `ResultApplier` 幂等回填业务表。
 
+## 安装 v1.5
+
+在 IC 项目目录安装 v1.5.x：
+
+```bash
+composer require august6th/workflow-bridge:^1.5 \
+  --no-plugins \
+  --no-scripts \
+  --ignore-platform-reqs \
+  --no-interaction
+composer show august6th/workflow-bridge
+composer dump-autoload --no-plugins --no-scripts
+```
+
+`^1.5` 允许 1.5.x 兼容更新；不要写无效的 `^1.x`。安装参数会暂时跳过插件、脚本和平台要求，上线前必须在 IC 目标环境核对 PHP/扩展兼容性并完成测试。
+
 ## 建表
 
 项目尚未上线，IC 业务库只执行最终 DDL：
@@ -59,6 +75,8 @@ local_apply_status=applied/skipped -> 本地处理完成
 `started_at`、`finished_at`、`applied_at` 等尚未发生时为 `NULL`。
 
 ## 调度
+
+v1.5 中，`workflow:retry-start` 必须同时传入非空 `--owner` 和 `--process`，否则错误退出 1；不再支持 owner-only 扫描。应设置 `--limit`（最大 1000），该 limit 同时限制候选处理和每轮租约恢复，避免大事务与长锁。
 
 ```cron
 * * * * * cd /absolute/path/to/ic && /usr/bin/flock -n /tmp/ic-workflow-retry-start.lock /usr/bin/php artisan workflow:retry-start --owner=ic --process=skc_approval >> /absolute/path/to/ic/storage/logs/workflow-retry-start.log 2>&1

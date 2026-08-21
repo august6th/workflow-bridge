@@ -127,6 +127,33 @@ class ResultApplicationServiceTest extends TestCase
         $this->assertSame(WorkflowApprovalResult::APPLY_APPLIED, $result->fresh()->local_apply_status);
     }
 
+    public function testProcessDueRecoversAtMostLimitExpiredLeases()
+    {
+        $first = $this->createTerminalResult('APPLY-LEASE-LIMIT-1');
+        $second = $this->createTerminalResult('APPLY-LEASE-LIMIT-2');
+        foreach ([$first, $second] as $result) {
+            $result->local_apply_status = WorkflowApprovalResult::APPLY_PROCESSING;
+            $result->apply_processing_at = '2026-08-18 00:00:00';
+            $result->save();
+        }
+        $applier = $this->createMock(ResultApplier::class);
+        $applier->expects($this->once())->method('apply')->willReturn(true);
+        $service = new ResultApplicationService(
+            $this->registryWith('ic', 'skc_approval', $applier),
+            ['apply_lease_seconds' => 300]
+        );
+
+        $stats = $service->processDue([
+            'owner_system' => 'ic',
+            'process_code' => 'skc_approval',
+            'limit' => 1,
+        ]);
+
+        $this->assertSame(1, $stats['processed']);
+        $this->assertSame(WorkflowApprovalResult::APPLY_APPLIED, $first->fresh()->local_apply_status);
+        $this->assertSame(WorkflowApprovalResult::APPLY_PROCESSING, $second->fresh()->local_apply_status);
+    }
+
     public function testProcessDueDoesNotCountAResultClaimedByAnotherWorker()
     {
         $result = $this->createTerminalResult('APPLY-CLAIMED');

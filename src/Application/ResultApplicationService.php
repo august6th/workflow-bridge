@@ -79,7 +79,7 @@ class ResultApplicationService
         $scope = $this->routeScope($options);
         $limit = isset($options['limit']) ? min(1000, max(1, (int) $options['limit'])) : 100;
 
-        $this->recoverExpiredLeases($scope);
+        $this->recoverExpiredLeases($scope, $limit);
 
         $ids = $this->dueQuery($scope, $options)
             ->orderBy('id', 'asc')
@@ -168,12 +168,12 @@ class ResultApplicationService
         $query = $this->applyRouteScope($query, $scope);
 
         return $query
-            ->where('apply_next_retry_at', '<=', date('Y-m-d H:i:s'))
             ->whereIn('local_apply_status', $statuses)
             ->whereIn('workflow_status', [
                 WorkflowApprovalResult::STATUS_APPROVED,
                 WorkflowApprovalResult::STATUS_REJECTED,
-            ]);
+            ])
+            ->where('apply_next_retry_at', '<=', date('Y-m-d H:i:s'));
     }
 
     protected function applyRouteScope($query, array $scope)
@@ -192,7 +192,7 @@ class ResultApplicationService
         });
     }
 
-    protected function recoverExpiredLeases(array $scope)
+    protected function recoverExpiredLeases(array $scope, $limit)
     {
         if (empty($scope)) {
             return 0;
@@ -202,20 +202,35 @@ class ResultApplicationService
             ? max(30, (int) $this->config['apply_lease_seconds'])
             : 300;
         $now = date('Y-m-d H:i:s');
-        $query = $this->applyRouteScope(WorkflowApprovalResult::query(), $scope)
+        $expiredBefore = date('Y-m-d H:i:s', time() - $leaseSeconds);
+        $ids = $this->applyRouteScope(WorkflowApprovalResult::query(), $scope)
             ->where('local_apply_status', WorkflowApprovalResult::APPLY_PROCESSING)
-            ->where('apply_processing_at', '<=', date('Y-m-d H:i:s', time() - $leaseSeconds))
+            ->where('apply_processing_at', '<=', $expiredBefore)
             ->whereIn('workflow_status', [
                 WorkflowApprovalResult::STATUS_APPROVED,
                 WorkflowApprovalResult::STATUS_REJECTED,
-            ]);
+            ])
+            ->orderBy('id', 'asc')
+            ->limit(min(1000, max(1, (int) $limit)))
+            ->pluck('id')
+            ->all();
+        if ($ids === []) {
+            return 0;
+        }
 
-        return $query->update([
-            'local_apply_status' => WorkflowApprovalResult::APPLY_FAILED,
-            'local_apply_error' => 'Workflow result application lease expired',
-            'apply_next_retry_at' => $now,
-            'updated_at' => $now,
-        ]);
+        return WorkflowApprovalResult::whereIn('id', $ids)
+            ->where('local_apply_status', WorkflowApprovalResult::APPLY_PROCESSING)
+            ->where('apply_processing_at', '<=', $expiredBefore)
+            ->whereIn('workflow_status', [
+                WorkflowApprovalResult::STATUS_APPROVED,
+                WorkflowApprovalResult::STATUS_REJECTED,
+            ])
+            ->update([
+                'local_apply_status' => WorkflowApprovalResult::APPLY_FAILED,
+                'local_apply_error' => 'Workflow result application lease expired',
+                'apply_next_retry_at' => $now,
+                'updated_at' => $now,
+            ]);
     }
 
     protected function markCompleted(WorkflowApprovalResult $result, $applied)

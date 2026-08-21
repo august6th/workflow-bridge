@@ -38,12 +38,10 @@ CREATE TABLE IF NOT EXISTS `workflow_approval_results` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_war_idem` (`idempotency_key`),
   UNIQUE KEY `uk_war_biz` (`business_key`,`process_code`,`owner_system`),
-  KEY `idx_war_instance` (`instance_uuid`),
-  KEY `idx_war_status_updated` (`workflow_status`,`updated_at`),
-  KEY `idx_war_apply_created` (`local_apply_status`,`created_at`),
-  KEY `idx_war_start_due` (`start_next_retry_at`,`start_status`),
-  KEY `idx_war_apply_due` (`apply_next_retry_at`,`local_apply_status`),
-  KEY `idx_war_route_apply_due` (`process_code`,`owner_system`,`apply_next_retry_at`,`local_apply_status`)
+  KEY `idx_war_route_apply_due` (`process_code`,`owner_system`,`local_apply_status`,`workflow_status`,`apply_next_retry_at`),
+  KEY `idx_war_route_apply_lease` (`process_code`,`owner_system`,`local_apply_status`,`apply_processing_at`),
+  KEY `idx_war_route_start_due` (`process_code`,`owner_system`,`start_status`,`start_next_retry_at`),
+  KEY `idx_war_route_start_lease` (`process_code`,`owner_system`,`start_status`,`start_processing_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Workflow 审核桥接结果表';
 
 CREATE TABLE IF NOT EXISTS `workflow_callback_deliveries` (
@@ -66,5 +64,5 @@ CREATE TABLE IF NOT EXISTS `workflow_callback_deliveries` (
   UNIQUE KEY `uk_wcd_idempotency` (`idempotency_key`),
   KEY `idx_wcd_result` (`approval_result_id`),
   KEY `idx_wcd_instance` (`instance_uuid`),
-  KEY `idx_wcd_biz` (`business_key`,`process_code`,`owner_system`)
+  KEY `idx_wcd_received` (`received_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Workflow 回调投递记录';

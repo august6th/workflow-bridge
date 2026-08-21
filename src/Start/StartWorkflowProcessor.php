@@ -5,6 +5,7 @@ namespace August6th\WorkflowBridge\Start;
 use August6th\WorkflowBridge\Client\WorkflowClient;
 use August6th\WorkflowBridge\Models\WorkflowApprovalResult;
 use Exception;
+use InvalidArgumentException;
 use RuntimeException;
 
 class StartWorkflowProcessor
@@ -27,6 +28,13 @@ class StartWorkflowProcessor
      */
     public function process($approvalResultId)
     {
+        list($result) = $this->processWithClaim($approvalResultId);
+
+        return $result;
+    }
+
+    protected function processWithClaim($approvalResultId)
+    {
         $now = date('Y-m-d H:i:s');
         $claimed = WorkflowApprovalResult::where('id', $approvalResultId)
             ->whereIn('start_status', [
@@ -42,7 +50,7 @@ class StartWorkflowProcessor
 
         $result = WorkflowApprovalResult::where('id', $approvalResultId)->firstOrFail();
         if ($claimed !== 1) {
-            return $result;
+            return [$result, false];
         }
 
         $payload = [
@@ -59,10 +67,10 @@ class StartWorkflowProcessor
             $response = $this->client->startProcess($result->process_code, $payload);
             $instance = $this->extractInstance($response);
         } catch (Exception $exception) {
-            return $this->recoverOrFail($result, $exception);
+            return [$this->recoverOrFail($result, $exception), true];
         }
 
-        return $this->markSucceeded($result, $instance);
+        return [$this->markSucceeded($result, $instance), true];
     }
 
     /**
@@ -75,53 +83,72 @@ class StartWorkflowProcessor
             ? $options['owner_system']
             : (isset($this->config['owner_system']) ? $this->config['owner_system'] : 'erp');
         $processCode = isset($options['process_code']) ? $options['process_code'] : '';
+        if (!is_string($ownerSystem) || !is_string($processCode)) {
+            throw new InvalidArgumentException('owner_system and process_code must be strings.');
+        }
+        $ownerSystem = trim($ownerSystem);
+        $processCode = trim($processCode);
+        if ($ownerSystem === '' || $processCode === '') {
+            throw new InvalidArgumentException('owner_system and process_code are required.');
+        }
         $businessKeys = isset($options['business_keys']) && is_array($options['business_keys'])
             ? array_values(array_unique($options['business_keys']))
             : [];
-        $limit = isset($options['limit']) ? max(1, (int) $options['limit']) : 100;
+        $limit = isset($options['limit']) ? min(1000, max(1, (int) $options['limit'])) : 100;
         $leaseSeconds = isset($this->config['start_lease_seconds'])
             ? max(30, (int) $this->config['start_lease_seconds'])
             : 300;
         $now = date('Y-m-d H:i:s');
+        $expiredBefore = date('Y-m-d H:i:s', time() - $leaseSeconds);
 
-        $staleQuery = WorkflowApprovalResult::query()
-            ->where('owner_system', $ownerSystem)
+        $staleQuery = WorkflowApprovalResult::query();
+        $this->applyRoute($staleQuery, $processCode, $ownerSystem);
+        $staleQuery
             ->where('start_status', WorkflowApprovalResult::START_PROCESSING)
-            ->where('start_processing_at', '<=', date('Y-m-d H:i:s', time() - $leaseSeconds));
-        if ($processCode !== '') {
-            $staleQuery->where('process_code', $processCode);
-        }
+            ->where('start_processing_at', '<=', $expiredBefore);
         if ($businessKeys) {
             $staleQuery->whereIn('business_key', $businessKeys);
         }
-        $staleQuery->update([
-            'start_status' => WorkflowApprovalResult::START_FAILED,
-            'start_error' => 'Workflow start processing lease expired',
-            'start_next_retry_at' => $now,
-            'updated_at' => $now,
-        ]);
+        $staleIds = $staleQuery
+            ->orderBy('id', 'asc')
+            ->limit($limit)
+            ->pluck('id')
+            ->all();
+        if ($staleIds !== []) {
+            WorkflowApprovalResult::whereIn('id', $staleIds)
+                ->where('start_status', WorkflowApprovalResult::START_PROCESSING)
+                ->where('start_processing_at', '<=', $expiredBefore)
+                ->update([
+                    'start_status' => WorkflowApprovalResult::START_FAILED,
+                    'start_error' => 'Workflow start processing lease expired',
+                    'start_next_retry_at' => $now,
+                    'updated_at' => $now,
+                ]);
+        }
 
-        $query = WorkflowApprovalResult::query()
-            ->where('owner_system', $ownerSystem)
+        $query = WorkflowApprovalResult::query();
+        $this->applyRoute($query, $processCode, $ownerSystem);
+        $query
             ->whereIn('start_status', [
                 WorkflowApprovalResult::START_PENDING,
                 WorkflowApprovalResult::START_FAILED,
             ])
-            ->where('start_next_retry_at', '<=', $now)
-            ->orderBy('id', 'asc')
-            ->limit($limit);
-
-        if ($processCode !== '') {
-            $query->where('process_code', $processCode);
-        }
+            ->where('start_next_retry_at', '<=', $now);
         if ($businessKeys) {
             $query->whereIn('business_key', $businessKeys);
         }
+        $ids = $query
+            ->orderBy('id', 'asc')
+            ->limit($limit)
+            ->pluck('id')
+            ->all();
 
-        $ids = $query->pluck('id')->all();
         $stats = ['processed' => 0, 'succeeded' => 0, 'failed' => 0];
         foreach ($ids as $id) {
-            $result = $this->process($id);
+            list($result, $claimedByThisWorker) = $this->processWithClaim($id);
+            if (!$claimedByThisWorker) {
+                continue;
+            }
             $stats['processed']++;
             if ($result->start_status === WorkflowApprovalResult::START_SUCCEEDED) {
                 $stats['succeeded']++;
@@ -131,6 +158,13 @@ class StartWorkflowProcessor
         }
 
         return $stats;
+    }
+
+    protected function applyRoute($query, $processCode, $ownerSystem)
+    {
+        return $query
+            ->where('process_code', $processCode)
+            ->where('owner_system', $ownerSystem);
     }
 
     /**
